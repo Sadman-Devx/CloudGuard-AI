@@ -1,0 +1,114 @@
+{
+  "schema_version": "1.0",
+  "name": "Exposed database rules",
+  "region": "us-east-1",
+  "vpcs": [
+    { "id": "vpc-main", "cidr": "10.0.0.0/16", "name": "main" }
+  ],
+  "internet_gateways": [
+    { "id": "igw-main", "vpc_id": "vpc-main" }
+  ],
+  "route_tables": [
+    {
+      "id": "rtb-public",
+      "vpc_id": "vpc-main",
+      "name": "public",
+      "routes": [
+        { "destination_cidr": "10.0.0.0/16", "target": "local" },
+        { "destination_cidr": "0.0.0.0/0", "target": "igw-main" }
+      ]
+    },
+    {
+      "id": "rtb-private",
+      "vpc_id": "vpc-main",
+      "name": "private",
+      "routes": [
+        { "destination_cidr": "10.0.0.0/16", "target": "local" }
+      ]
+    }
+  ],
+  "subnets": [
+    {
+      "id": "subnet-public",
+      "vpc_id": "vpc-main",
+      "cidr": "10.0.1.0/24",
+      "route_table_id": "rtb-public",
+      "availability_zone": "us-east-1a",
+      "name": "public"
+    },
+    {
+      "id": "subnet-private",
+      "vpc_id": "vpc-main",
+      "cidr": "10.0.2.0/24",
+      "route_table_id": "rtb-private",
+      "availability_zone": "us-east-1a",
+      "name": "private"
+    }
+  ],
+  "security_groups": [
+    {
+      "id": "sg-web",
+      "vpc_id": "vpc-main",
+      "name": "web",
+      "description": "Web tier with SSH left open to the world",
+      "ingress": [
+        { "protocol": "tcp", "from_port": 443, "to_port": 443, "cidr": "0.0.0.0/0", "description": "public HTTPS" },
+        { "protocol": "tcp", "from_port": 22, "to_port": 22, "cidr": "0.0.0.0/0", "description": "temporary SSH" }
+      ],
+      "egress": [
+        { "protocol": "tcp", "from_port": 8000, "to_port": 8000, "destination_security_group_id": "sg-app" }
+      ]
+    },
+    {
+      "id": "sg-app",
+      "vpc_id": "vpc-main",
+      "name": "app",
+      "description": "Application tier",
+      "ingress": [
+        { "protocol": "tcp", "from_port": 8000, "to_port": 8000, "source_security_group_id": "sg-web" }
+      ],
+      "egress": [
+        { "protocol": "-1", "cidr": "0.0.0.0/0", "description": "allow everything out" }
+      ]
+    },
+    {
+      "id": "sg-db",
+      "vpc_id": "vpc-main",
+      "name": "db",
+      "description": "Database with broad database-port ingress rules",
+      "ingress": [
+        { "protocol": "tcp", "from_port": 5432, "to_port": 5432, "cidr": "0.0.0.0/0", "description": "postgres from anywhere" },
+        { "protocol": "tcp", "from_port": 3306, "to_port": 3306, "cidr": "0.0.0.0/0", "description": "mysql from anywhere" }
+      ],
+      "egress": []
+    }
+  ],
+  "network_acls": [],
+  "instances": [
+    {
+      "id": "i-web-1",
+      "name": "web-1",
+      "subnet_id": "subnet-public",
+      "private_ip": "10.0.1.10",
+      "public_ip": "203.0.113.10",
+      "security_group_ids": ["sg-web"],
+      "tags": { "tier": "web" }
+    },
+    {
+      "id": "i-app-1",
+      "name": "app-1",
+      "subnet_id": "subnet-private",
+      "private_ip": "10.0.2.10",
+      "security_group_ids": ["sg-app"],
+      "tags": { "tier": "app" }
+    },
+    {
+      "id": "i-db-1",
+      "name": "db-1",
+      "subnet_id": "subnet-private",
+      "private_ip": "10.0.2.20",
+      "security_group_ids": ["sg-db"],
+      "tags": { "tier": "db" }
+    }
+  ]
+}
