@@ -15,6 +15,7 @@ urlpatterns = [
         name="project-snapshot-from-fixture",
     ),
     path("snapshots/<int:pk>/", views.SnapshotDetailView.as_view(), name="snapshot-detail"),
+    path("snapshots/<int:pk>/topology/", views.SnapshotTopologyView.as_view(), name="snapshot-topology"),
     path(
         "snapshots/<int:snapshot_id>/resources/",
         views.SnapshotResourcesView.as_view(),

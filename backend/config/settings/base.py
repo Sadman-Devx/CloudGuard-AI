@@ -37,6 +37,8 @@ INSTALLED_APPS = [
     # Local apps
     "apps.projects.apps.ProjectsConfig",
     "apps.cloud_resources.apps.CloudResourcesConfig",
+    "apps.security_engine.apps.SecurityEngineConfig",
+    "apps.ai_copilot.apps.AiCopilotConfig",
 ]
 
 MIDDLEWARE = [
@@ -109,6 +111,7 @@ REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [],
     "DEFAULT_PERMISSION_CLASSES": ["rest_framework.permissions.AllowAny"],
     "DEFAULT_THROTTLE_CLASSES": [],
+    "DEFAULT_THROTTLE_RATES": {"ai_explain": os.environ.get("AI_EXPLAIN_RATE", "30/min")},
 }
 
 SPECTACULAR_SETTINGS = {
@@ -121,7 +124,7 @@ SPECTACULAR_SETTINGS = {
 CORS_ALLOWED_ORIGINS = env_list("CORS_ALLOWED_ORIGINS", "http://localhost:5173")
 CSRF_TRUSTED_ORIGINS = env_list("CSRF_TRUSTED_ORIGINS", "http://localhost:5173")
 
-APP_VERSION = "0.2.0"
+APP_VERSION = "0.5.0"
 
 # Sample configuration fixtures offered by the import screen (read-only, allow-listed by name).
 FIXTURES_DIR = Path(os.environ.get("FIXTURES_DIR", BASE_DIR.parent / "sample_data" / "aws"))
@@ -131,10 +134,21 @@ MAX_UPLOAD_BYTES = int(os.environ.get("MAX_UPLOAD_BYTES", 1_000_000))
 DATA_UPLOAD_MAX_MEMORY_SIZE = MAX_UPLOAD_BYTES + 100_000
 MAX_JSON_DEPTH = int(os.environ.get("MAX_JSON_DEPTH", 12))
 
-# Meta Model API (wired up on Day 5; kept configurable).
+# Meta Model API (Day 5). Everything is configurable; nothing is hard-coded to one model.
 META_API_KEY = os.environ.get("META_API_KEY", "")
 META_MODEL_ID = os.environ.get("META_MODEL_ID", "")
-META_API_BASE_URL = os.environ.get("META_API_BASE_URL", "")
+META_API_BASE_URL = os.environ.get("META_API_BASE_URL", "") or "https://api.meta.ai"
+META_CHAT_PATH = os.environ.get("META_CHAT_PATH", "/v1/chat/completions")
+# Ask the API for JSON mode (response_format). Off by default: output is validated either way.
+META_JSON_MODE = os.environ.get("META_JSON_MODE", "false").lower() in ("1", "true", "yes")
+
+# "meta" calls the Meta Model API; "mock" is an offline demo provider that is always labelled as
+# such in the UI. Default: meta when a key and model are configured, otherwise mock.
+AI_PROVIDER = os.environ.get("AI_PROVIDER", "") or ("meta" if META_API_KEY and META_MODEL_ID else "mock")
+AI_TIMEOUT_SECONDS = float(os.environ.get("AI_TIMEOUT_SECONDS", 30))
+AI_MAX_ATTEMPTS = int(os.environ.get("AI_MAX_ATTEMPTS", 2))
+# Spending guard: real (non-mock) model calls allowed per rolling hour across the whole app.
+AI_MAX_REQUESTS_PER_HOUR = int(os.environ.get("AI_MAX_REQUESTS_PER_HOUR", 60))
 
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO")
 

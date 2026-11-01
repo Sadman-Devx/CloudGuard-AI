@@ -1,16 +1,25 @@
 import { useState } from "react";
 
+import FindingsPage from "./pages/FindingsPage.jsx";
 import ImportPage from "./pages/ImportPage.jsx";
 import StatusPage from "./pages/StatusPage.jsx";
+import TopologyPage from "./pages/TopologyPage.jsx";
 
 const TABS = [
-  { id: "status", label: "Status", Page: StatusPage },
-  { id: "import", label: "Import", Page: ImportPage },
+  { id: "status", label: "Status" },
+  { id: "import", label: "Import" },
+  { id: "topology", label: "Topology" },
+  { id: "findings", label: "Findings" },
 ];
 
 export default function App() {
   const [tab, setTab] = useState("status");
-  const { Page } = TABS.find((t) => t.id === tab);
+  const [focus, setFocus] = useState(null); // snapshot to open on the Topology tab
+
+  const viewTopology = (snapshot) => {
+    setFocus({ projectId: snapshot.project, snapshotId: snapshot.id });
+    setTab("topology");
+  };
 
   return (
     <div className="min-h-screen">
@@ -18,7 +27,9 @@ export default function App() {
         <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-3 px-4 py-4">
           <div>
             <h1 className="text-xl font-bold tracking-tight">CloudGuard AI</h1>
-            <p className="text-xs text-slate-500">Cloud network security copilot with digital twin simulation</p>
+            <p className="text-xs text-slate-500">
+              Cloud network security copilot with digital twin simulation
+            </p>
           </div>
           <span className="rounded-full bg-indigo-50 px-3 py-1 text-xs font-medium text-indigo-700">
             Read-only · no changes are applied to real infrastructure
@@ -42,8 +53,13 @@ export default function App() {
           ))}
         </nav>
       </header>
-      <main className="mx-auto max-w-5xl px-4 py-8">
-        <Page />
+      <main
+        className={`mx-auto px-4 py-8 ${tab === "topology" ? "max-w-[1500px]" : "max-w-5xl"}`}
+      >
+        {tab === "status" && <StatusPage />}
+        {tab === "import" && <ImportPage onViewTopology={viewTopology} />}
+        {tab === "topology" && <TopologyPage focus={focus} />}
+        {tab === "findings" && <FindingsPage focus={focus} />}
       </main>
     </div>
   );

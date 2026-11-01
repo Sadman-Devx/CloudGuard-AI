@@ -136,3 +136,15 @@ describe("ImportPage", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent("Could not load projects");
   });
 });
+
+describe("ImportPage -> topology hand-off", () => {
+  it("offers a View topology action that reports the imported snapshot", async () => {
+    mockFetch(base({ "POST /api/projects/1/snapshots/from-fixture/": () => ({ status: 201, body: SNAPSHOT }) }));
+    const onViewTopology = vi.fn();
+    render(<ImportPage onViewTopology={onViewTopology} />);
+    await userEvent.selectOptions(await screen.findByLabelText("Sample configuration"), "safe_network");
+    await userEvent.click(screen.getByRole("button", { name: "Import sample" }));
+    await userEvent.click(await screen.findByRole("button", { name: "View topology" }));
+    expect(onViewTopology).toHaveBeenCalledWith(expect.objectContaining({ id: 10, project: 1 }));
+  });
+});

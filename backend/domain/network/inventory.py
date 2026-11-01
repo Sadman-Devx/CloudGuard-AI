@@ -93,7 +93,7 @@ def _plain(value: Any) -> Any:
     return value
 
 
-def _metadata(obj: Any, *, drop: tuple[str, ...] = ("id", "name")) -> dict[str, Any]:
+def resource_metadata(obj: Any, *, drop: tuple[str, ...] = ("id", "name")) -> dict[str, Any]:
     data = {k: v for k, v in dataclasses.asdict(obj).items() if k not in drop}
     if "tags" in data:
         data["tags"] = dict(data["tags"])
@@ -117,7 +117,9 @@ def build_inventory(config: NetworkConfig) -> Inventory:
 
     def add(resource_type: str, obj: Any, name: str = "") -> None:
         resources.append(
-            ResourceRecord(obj.id, resource_type, name or getattr(obj, "name", ""), region, _metadata(obj))
+            ResourceRecord(
+                obj.id, resource_type, name or getattr(obj, "name", ""), region, resource_metadata(obj)
+            )
         )
 
     def link(source: str, target: str, relation_type: str, **metadata: Any) -> None:

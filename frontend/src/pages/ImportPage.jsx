@@ -7,7 +7,7 @@ import SnapshotSummary from "../features/import/SnapshotSummary.jsx";
 import ValidationErrors from "../features/import/ValidationErrors.jsx";
 import ProjectPicker from "../features/projects/ProjectPicker.jsx";
 
-export default function ImportPage() {
+export default function ImportPage({ onViewTopology }) {
   const [projects, setProjects] = useState([]);
   const [fixtures, setFixtures] = useState([]);
   const [projectId, setProjectId] = useState(null);
@@ -108,7 +108,7 @@ export default function ImportPage() {
         </p>
       )}
       {error && <ValidationErrors error={error} />}
-      {snapshot && <SnapshotSummary snapshot={snapshot} />}
+      {snapshot && <SnapshotSummary snapshot={snapshot} onViewTopology={onViewTopology} />}
     </section>
   );
 }

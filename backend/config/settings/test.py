@@ -5,6 +5,9 @@ import dj_database_url
 from .base import *  # noqa: F401,F403
 
 DEBUG = False
+AI_PROVIDER = "mock"
+META_API_KEY = ""
+META_MODEL_ID = ""
 SECRET_KEY = "test-secret-key"
 ALLOWED_HOSTS = ["testserver", "localhost"]
 

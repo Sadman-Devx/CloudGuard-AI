@@ -6,11 +6,13 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.projects.models import Project
+from common.exceptions import ConfigValidationFailed
 
 from .models import CloudResource, ConfigurationSnapshot
 from .serializers import CloudResourceSerializer, FixtureImportSerializer, SnapshotSerializer
 from .services.fixtures import FixtureNotFound, list_fixtures, load_fixture
 from .services.snapshots import import_snapshot
+from .services.topology import SnapshotIncompatible, snapshot_topology
 
 
 class ProjectSnapshotsView(generics.ListAPIView):
@@ -79,3 +81,15 @@ class SnapshotResourcesView(generics.ListAPIView):
         if resource_type:
             queryset = queryset.filter(resource_type=resource_type)
         return queryset
+
+
+class SnapshotTopologyView(APIView):
+    """Nodes and edges of the digital-twin graph. Read-only; derived from the stored input."""
+
+    @extend_schema(responses={200: dict}, tags=["topology"])
+    def get(self, request, pk):
+        snapshot = get_object_or_404(ConfigurationSnapshot, pk=pk)
+        try:
+            return Response(snapshot_topology(snapshot))
+        except SnapshotIncompatible as exc:
+            raise ConfigValidationFailed(exc.errors) from exc

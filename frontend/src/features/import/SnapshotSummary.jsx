@@ -10,7 +10,7 @@ const LABELS = {
   instance: "Instances",
 };
 
-export default function SnapshotSummary({ snapshot }) {
+export default function SnapshotSummary({ snapshot, onViewTopology }) {
   return (
     <section aria-label="Imported snapshot" className="space-y-4">
       <Notice tone="success" title={`Snapshot v${snapshot.version} saved and validated`}>
@@ -28,6 +28,16 @@ export default function SnapshotSummary({ snapshot }) {
           </div>
         ))}
       </dl>
+
+      {onViewTopology && (
+        <button
+          type="button"
+          onClick={() => onViewTopology(snapshot)}
+          className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700"
+        >
+          View topology
+        </button>
+      )}
 
       {snapshot.warnings?.length > 0 && (
         <Notice tone="warning" title={`${snapshot.warnings.length} warning(s)`}>
