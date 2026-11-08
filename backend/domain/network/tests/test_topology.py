@@ -126,12 +126,14 @@ def test_instance_flags_follow_subnet_and_public_ip(valid_config):
 
 
 def test_fixtures_classify_public_and_private_subnets(sample_fixture):
-    _, data = sample_fixture
+    name, data = sample_fixture
     t = build(data)
     assert t.summary["public_subnets"] == ["subnet-public"]
     assert t.summary["private_subnets"] == ["subnet-private"]
     assert node(t, "i-web-1").data["subnet_kind"] == "public"
-    assert node(t, "i-db-1").data["subnet_kind"] == "private"
+    # public_database deliberately misplaces the database in the public subnet.
+    expected_db_kind = "public" if name == "public_database" else "private"
+    assert node(t, "i-db-1").data["subnet_kind"] == expected_db_kind
 
 
 # --------------------------------------------------------------------------- security group flows

@@ -56,6 +56,9 @@ _NON_PUBLIC_RANGES = tuple(
     )
 )
 
+# Public alias so other domain modules (reachability) reuse one definition of "public".
+NON_PUBLIC_RANGES = _NON_PUBLIC_RANGES
+
 _SECTION_KEYS = (
     "vpcs",
     "subnets",

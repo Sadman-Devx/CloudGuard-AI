@@ -39,6 +39,7 @@ INSTALLED_APPS = [
     "apps.cloud_resources.apps.CloudResourcesConfig",
     "apps.security_engine.apps.SecurityEngineConfig",
     "apps.ai_copilot.apps.AiCopilotConfig",
+    "apps.simulations.apps.SimulationsConfig",
 ]
 
 MIDDLEWARE = [
@@ -111,7 +112,11 @@ REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [],
     "DEFAULT_PERMISSION_CLASSES": ["rest_framework.permissions.AllowAny"],
     "DEFAULT_THROTTLE_CLASSES": [],
-    "DEFAULT_THROTTLE_RATES": {"ai_explain": os.environ.get("AI_EXPLAIN_RATE", "30/min")},
+    "DEFAULT_THROTTLE_RATES": {
+        "ai_explain": os.environ.get("AI_EXPLAIN_RATE", "30/min"),
+        # Simulations are pure CPU (no model call) but each one writes a row; keep them bounded.
+        "simulate": os.environ.get("SIMULATE_RATE", "60/min"),
+    },
 }
 
 SPECTACULAR_SETTINGS = {

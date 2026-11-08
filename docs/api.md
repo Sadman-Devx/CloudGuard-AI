@@ -1,4 +1,4 @@
-# API reference (v0.2.0)
+# API reference (v0.6.0)
 
 Interactive docs: `/api/docs/` (Swagger UI), schema: `/api/schema/`. All bodies are JSON. Lists are paginated
 (`count`, `next`, `previous`, `results`; `?page=`, `?page_size=` ≤ 200).
@@ -33,7 +33,17 @@ Every response carries `X-Request-ID` (a well-formed client-supplied ID is echoe
 | GET | `/api/snapshots/{id}/` | Snapshot metadata |
 | GET | `/api/snapshots/{id}/resources/` | Normalized inventory; filter `?type=security_group` |
 
-Planned (later days): `/topology/`, `/analyze/`, `/findings/`, `/explain/`, `/simulations/` per the roadmap.
+| POST | `/api/snapshots/{id}/reachability/` | One question: `{source, destination, protocol, port, source_ip?}` → verdict, reason codes, full trace |
+| POST | `/api/snapshots/{id}/simulations/` | Run a what-if. Body: exactly one of `proposed_change` / `interaction_id`, plus optional `finding_id`, `required_paths[]` (≤ 20). `201` |
+| GET | `/api/snapshots/{id}/simulations/` | History (paginated, no traces) |
+| GET | `/api/simulations/{id}/` | Full evidence: `result` (diff), `before` / `after` (findings + per-path traces) |
+
+Simulations are write-once, never modify the snapshot or its stored findings, always report
+`applied_to_cloud: false`, and are throttled (`SIMULATE_RATE`, default `60/min`). The change is
+re-validated server-side even when it comes from a stored AI explanation. Request errors are `400`
+with `details` keyed by field (`proposed_change`, `required_paths`, `interaction_id`, `finding_id`).
+
+Topology, analysis and copilot endpoints: see `/api/docs/`.
 
 ## Example
 
@@ -56,4 +66,20 @@ Rejected upload (`422`):
 {"error": {"code": "invalid_configuration", "message": "The uploaded configuration is invalid.",
  "details": [{"path": "vpcs[0].cidr", "code": "invalid_cidr", "message": "Invalid CIDR '10.0.0.0/99': …"}],
  "request_id": "a4fcf62fd26342a0a9a6be22d9baf035"}}
+```
+
+### Simulation example
+
+```bash
+curl -s -X POST localhost:8000/api/snapshots/1/simulations/ -H 'Content-Type: application/json' -d '{
+  "proposed_change": {"action":"replace_ingress_source","security_group_id":"sg-db",
+                      "protocol":"tcp","port":5432,"new_source_security_group_id":"sg-app"}}'
+```
+
+```json
+{"id": 1, "outcome": "improves_security", "recommended": true, "applied_to_cloud": false,
+ "result": {"required_paths_source": "inferred",
+   "summary_lines": ["Resolves SG-003 on sg-db.",
+     "Internet exposure anonymous internet -> i-db-1 tcp/5432: allowed -> blocked.",
+     "Required path i-app-1 -> i-db-1 tcp/5432 is preserved."]}}
 ```

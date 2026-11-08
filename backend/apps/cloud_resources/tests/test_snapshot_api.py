@@ -46,7 +46,7 @@ def test_upload_fixture_creates_validated_inventory(client, project, sample_fixt
         "internet_gateway": 1,
         "route_table": 2,
         "security_group": 3,
-        "network_acl": 0,
+        "network_acl": 1 if name == "public_database" else 0,  # only this fixture models an ACL
         "instance": 3,
     }
     assert body["warnings"] == []
@@ -54,7 +54,7 @@ def test_upload_fixture_creates_validated_inventory(client, project, sample_fixt
 
     snapshot = ConfigurationSnapshot.objects.get(pk=body["id"])
     assert snapshot.raw_json == data  # exact input preserved for reproducibility
-    assert snapshot.resources.count() == 12
+    assert snapshot.resources.count() == (13 if name == "public_database" else 12)
     assert snapshot.relationships.count() == body["relationship_count"]
 
 
@@ -246,7 +246,7 @@ def test_deleting_project_cascades(client, project, valid_config):
 
 def test_fixture_listing(client, db):
     names = {f["name"] for f in client.get("/api/fixtures/").json()["results"]}
-    assert names == {"safe_network", "exposed_database", "broken_app_connectivity"}
+    assert names == {"safe_network", "exposed_database", "broken_app_connectivity", "public_database"}
 
 
 def test_import_from_fixture(client, project):

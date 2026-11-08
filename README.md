@@ -8,7 +8,7 @@ resources connect, and (in later milestones) ask a Meta model to explain risks a
 are **simulated against a digital twin before anything is changed**. The MVP is software-only and
 **never modifies real AWS resources**.
 
-> **Status: Milestone A (Days 1–2) complete.** Foundation, normalized input schema, validated import,
+> **Status: Days 1–6 complete (backend).** Reachability engine and what-if simulator are in; the before/after UI lands on Day 7. *(Earlier status line: Milestone A, Days 1–2.)*  Foundation, normalized input schema, validated import,
 > persisted inventory. Topology graph, security rules, Meta AI copilot, and the simulator land in
 > Days 3–7. See [docs/architecture.md](docs/architecture.md) for the plan and
 > [docs/supported-network-semantics.md](docs/supported-network-semantics.md) for exactly what is modeled.
@@ -22,6 +22,7 @@ are **simulated against a digital twin before anything is changed**. The MVP is 
   (resources and relationships) — a rejected upload writes nothing.
 - REST API with OpenAPI docs (`/api/docs/`), error envelope with request IDs, upload size/nesting limits.
 - React UI: backend status screen and an import screen with validation feedback.
+- Deterministic **reachability** (`allowed` / `blocked` / `unknown` + reason trace) and a **what-if simulator** that applies a validated fix to a clone and reports resolved findings, preserved/lost paths and a `recommended` flag. See [docs/supported-network-semantics.md](docs/supported-network-semantics.md).
 
 ## Quick start
 
@@ -77,7 +78,7 @@ CI (`.github/workflows/ci.yml`) runs all of the above, plus a migrations check, 
 ```
 backend/    Django + DRF (apps/ = Django apps, domain/ = pure-Python network logic, common/ = shared API plumbing)
 frontend/   React + Vite + Tailwind
-sample_data/aws/   Three synthetic fixtures (safe, exposed database, broken app→DB connectivity)
+sample_data/aws/   Four synthetic fixtures (safe, exposed database, broken app→DB connectivity, internet-reachable database)
 docs/       Architecture, supported semantics, API, security model, onboarding
 ```
 

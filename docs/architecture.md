@@ -35,8 +35,21 @@ than by network calls. If a domain outgrows the monolith it can be extracted alo
 | `common/` | Error envelope, request IDs, bounded JSON parser, health view |
 | `config/settings/` | `base`, `development`, `production`, `test` |
 
-Planned: `apps/security_engine` (Day 4), `apps/ai_copilot` (Day 5), `apps/simulations` (Day 6),
-`domain/network/{topology,reachability,policy}.py` (Days 3, 6).
+| `domain/network/{topology,rules,proposals}.py` | Topology graph, SG-001..006 rule engine, validation of AI-proposed changes (Days 3-5) |
+| `domain/network/reachability.py` | Deterministic path evaluation with reason trace (Day 6) |
+| `domain/network/simulation.py` | Apply a validated change to a clone; diff findings and paths; outcome + `recommended` (Day 6) |
+| `apps/security_engine`, `apps/ai_copilot` | Persisted findings; provider-adapter AI explanations (Days 4-5) |
+| `apps/simulations` | `Simulation` evidence rows, request validation, REST API (Day 6) |
+
+## Simulation data flow (Day 6)
+
+```text
+POST /api/snapshots/{id}/simulations/   {proposed_change | interaction_id, required_paths?}
+  -> serializer          exactly one source of the change; unknown fields rejected
+  -> proposals.validate_change   re-validated against the stored config (client/model untrusted)
+  -> simulation.simulate         clone -> evaluate rules + reachability before/after -> diff
+  -> Simulation row (write-once); snapshot and findings untouched; applied_to_cloud=false
+```
 
 ## Import data flow (Days 1–2)
 

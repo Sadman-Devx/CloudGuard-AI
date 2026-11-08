@@ -2,7 +2,7 @@
 
 CloudGuard analyses a **normalized, AWS-inspired JSON snapshot**, not raw AWS API output. The importer
 validates strictly and rejects anything it cannot model correctly. Unsupported constructs are errors, not
-approximations. Reachability semantics (Day 6) will be documented here as they are implemented.
+approximations. Reachability and simulation semantics are documented in the sections below.
 
 ## Top level
 
@@ -53,3 +53,66 @@ Protocols: `tcp`, `udp`, `icmp`, `-1` (all; ports must be omitted). Ports are 0�
 IPv6, multi-region/multi-account, peering/transit gateways/VPN, load balancers, NAT, prefix lists,
 IAM, Kubernetes. AWS semantics to respect in later milestones: security groups are stateful, NACLs are
 stateless and ordered, and an `0.0.0.0/0` ingress rule alone does **not** prove internet reachability.
+
+## Reachability (engine v1.0)
+
+`domain/network/reachability.py` answers "can X reach Y on tcp/5432?" with `allowed`, `blocked` or
+`unknown`, an ordered **trace** of every check, and **all** failing reason codes (not just the first).
+It is deterministic Python; no model is involved. `confidence_type` is always
+`deterministic_supported_subset`: this is **not** an authoritative AWS reachability proof.
+
+| Path | Checks (in packet order) |
+|---|---|
+| **internet → instance** | public IP · route back via an internet gateway · subnet ACL ingress (request) · subnet ACL egress (reply) · security-group ingress |
+| **instance → instance** (same VPC) | source SG egress · source-subnet ACL egress · local route · dest-subnet ACL ingress · dest SG ingress · dest-subnet ACL egress (reply) · return local route · source-subnet ACL ingress (reply) |
+
+AWS semantics respected: security groups are **stateful** (no return rule needed; a rule naming a peer
+group matches only instances in that group); network ACLs are **stateless** and **ordered** (lowest rule
+number wins, implicit final deny) so the reply is checked separately over the ephemeral range
+1024-65535; traffic **inside one subnet never crosses an ACL**; an empty security-group egress list
+denies all outbound traffic; `0.0.0.0/0` ingress alone does **not** make an instance reachable.
+
+Reason codes: `NO_PUBLIC_IP`, `NO_PUBLIC_ROUTE`, `NO_LOCAL_ROUTE`, `SG_INGRESS_DENIED`, `SG_EGRESS_DENIED`,
+`NACL_INGRESS_DENIED`, `NACL_EGRESS_DENIED`, `NACL_REPLY_INGRESS_DENIED`, `NACL_REPLY_EGRESS_DENIED`,
+and for `unknown`: `NACL_REPLY_PARTIAL`, `UNSUPPORTED_PROTOCOL`, `UNSUPPORTED_CROSS_VPC`.
+
+`security_group_risk: OVERLY_BROAD_INGRESS` is set when the rule that matched is open to `0.0.0.0/0`
+and is all-traffic or covers SSH/RDP/PostgreSQL/MySQL. It is independent of the verdict, which is how
+the product tells a **risky rule** (finding) from a **verified reachable path** (`allowed`).
+
+### Modelling decisions you should know about
+
+- **The anonymous internet client** (no `source_ip`) matches only `0.0.0.0/0` rules; a narrower CIDR
+  (an office range) does not cover it. Pass `source_ip` (a public IPv4 address) to ask about one
+  specific client instead.
+- **A subnet with no network ACL** is evaluated as AWS's *default* ACL (allow all) and the result lists
+  `<subnet>:DEFAULT_NACL_ASSUMED` under `assumptions`. This replaces the earlier "not modeled" wording,
+  because a snapshot that omits ACLs would otherwise make every path `unknown`. A configured ACL is
+  always evaluated exactly.
+- **Partial ephemeral-port coverage** on a reply is `unknown`, not a guess.
+
+### Not modelled (returned as `unknown`, never guessed)
+
+ICMP, paths between VPCs, NAT, peering, transit gateways, VPN, load balancers, host firewalls, IPv6,
+return-path asymmetry beyond the checks above, and instance → internet paths (a destination of
+`internet` is rejected).
+
+## Simulation (engine v1.0)
+
+`domain/network/simulation.py` applies a **validated** proposal to a *clone* of the configuration
+(frozen dataclasses: the original cannot change) and re-runs both the rule engine and reachability.
+Supported actions are exactly those of `proposals.py`: `replace_ingress_source`,
+`restrict_ingress_cidr`, `remove_ingress_rule`. A rule open to `0.0.0.0/0` that is wider than the
+proposal is changed as a whole and flagged `RULE_BROADER_THAN_PROPOSAL`.
+
+**Required connectivity.** Pass `required_paths`, or it is inferred from the *intent* of the change
+(not "everything that worked before", which would call least privilege a regression):
+`replace_ingress_source` requires the new source group's instances to reach the protected instances;
+`restrict_ingress_cidr` requires a representative public host (or in-CIDR instances) that worked before;
+`remove_ingress_rule` infers nothing. The anonymous internet is never required.
+
+**Outcome** (first match wins): `breaks_required_connectivity` · `inconclusive` ·
+`required_connectivity_unmet` · `introduces_new_risk` · `improves_security` · `no_effect`.
+`recommended` is true **only** when the outcome is `improves_security` *and* at least one required path
+exists and every required path is `allowed` afterwards. A fix whose effect on legitimate traffic cannot be
+verified is never recommended, and nothing is ever applied to a cloud account.
