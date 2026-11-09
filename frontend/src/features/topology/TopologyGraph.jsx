@@ -1,4 +1,10 @@
-import { Background, ConnectionMode, Controls, ReactFlow, ReactFlowProvider } from "@xyflow/react";
+import {
+  Background,
+  ConnectionMode,
+  Controls,
+  ReactFlow,
+  ReactFlowProvider,
+} from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { useMemo } from "react";
 
@@ -6,14 +12,25 @@ import { filterTopology, graphHeight, layoutTopology } from "./layout.js";
 import { nodeTypes } from "./nodeTypes.js";
 
 function Graph({ topology, hiddenTypes, selection, onSelect }) {
-  const { nodes, edges } = useMemo(() => layoutTopology(filterTopology(topology, hiddenTypes)), [topology, hiddenTypes]);
+  const { nodes, edges } = useMemo(
+    () => layoutTopology(filterTopology(topology, hiddenTypes)),
+    [topology, hiddenTypes],
+  );
 
   const shownNodes = useMemo(
-    () => nodes.map((n) => ({ ...n, selected: selection?.kind === "node" && selection.id === n.id })),
+    () =>
+      nodes.map((n) => ({
+        ...n,
+        selected: selection?.kind === "node" && selection.id === n.id,
+      })),
     [nodes, selection],
   );
   const shownEdges = useMemo(
-    () => edges.map((e) => ({ ...e, selected: selection?.kind === "edge" && selection.id === e.id })),
+    () =>
+      edges.map((e) => ({
+        ...e,
+        selected: selection?.kind === "edge" && selection.id === e.id,
+      })),
     [edges, selection],
   );
 
@@ -43,7 +60,10 @@ function Graph({ topology, hiddenTypes, selection, onSelect }) {
 }
 
 export default function TopologyGraph(props) {
-  const height = useMemo(() => graphHeight(props.topology, props.hiddenTypes), [props.topology, props.hiddenTypes]);
+  const height = useMemo(
+    () => graphHeight(props.topology, props.hiddenTypes),
+    [props.topology, props.hiddenTypes],
+  );
   return (
     <div
       role="region"

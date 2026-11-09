@@ -8,6 +8,7 @@ import {
 import Notice from "../../components/Notice.jsx";
 import { useAsyncData } from "../../hooks/useAsyncData.js";
 import { ACTION_LABELS, describeChange } from "../findings/severity.js";
+import SimulationPanel from "../simulations/SimulationPanel.jsx";
 
 function SourceBadge({ result }) {
   if (result.source === "meta_model") {
@@ -154,6 +155,13 @@ export default function CopilotPanel({ finding }) {
         </p>
       )}
       {result && !busy && <Result result={result} saved={!generated?.result} />}
+      {result && !busy && result.proposed_change && finding.snapshot && (
+        <SimulationPanel
+          key={result.id}
+          snapshotId={finding.snapshot}
+          interactionId={result.id}
+        />
+      )}
     </section>
   );
 }

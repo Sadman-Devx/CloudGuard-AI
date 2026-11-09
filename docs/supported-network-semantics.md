@@ -116,3 +116,11 @@ proposal is changed as a whole and flagged `RULE_BROADER_THAN_PROPOSAL`.
 `recommended` is true **only** when the outcome is `improves_security` *and* at least one required path
 exists and every required path is `allowed` afterwards. A fix whose effect on legitimate traffic cannot be
 verified is never recommended, and nothing is ever applied to a cloud account.
+## Unsupported scenarios and known limitations
+
+- Rules that split the internet into several ranges (for example `0.0.0.0/1` plus `128.0.0.0/1`) are not flagged as
+  "open to the world"; only a literal `0.0.0.0/0` is.
+- Only TCP, UDP and "all traffic" are modelled. ICMP and other IP protocols are not evaluated.
+- IPv6, prefix lists, VPC peering, transit gateways, VPNs, load balancers and NAT are not modelled.
+- When a NACL covers only part of the ephemeral return-port range the result is `unknown`, never "allowed".
+- Results are a simplified model, not an authoritative AWS reachability proof.

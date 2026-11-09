@@ -1,8 +1,10 @@
 """Prompt construction. Sends the minimum structured data needed, never credentials or raw configs.
 
-Names, descriptions and tags inside an imported configuration are untrusted (they may contain
-prompt-injection text), so they are sanitised, size-capped, JSON-encoded inside a delimited data
-block, and the system prompt tells the model to treat that block purely as data.
+Names and descriptions inside an imported configuration are untrusted: they may contain
+prompt-injection text, or secrets someone pasted into a description. They are scrubbed of
+credentials/e-mail addresses, sanitised, size-capped, JSON-encoded inside a delimited data block,
+and the system prompt tells the model to treat that block purely as data. Tags and addresses
+(other than rule CIDRs) are not sent at all.
 """
 
 from __future__ import annotations
@@ -10,11 +12,13 @@ from __future__ import annotations
 import json
 from typing import Any
 
+from common.sanitize import redact_secrets
 from domain.network.proposals import ACTIONS, clean_text
 from domain.network.rules import RULES, WORLD_CIDR
 from domain.network.schema import NetworkConfig, SecurityGroup, SecurityGroupRule
 
-PROMPT_VERSION = "1"
+# Bumped to 2 when secret redaction was added: cached answers made from unredacted prompts are stale.
+PROMPT_VERSION = "2"
 
 DATA_OPEN, DATA_CLOSE = "<finding_data>", "</finding_data>"
 
@@ -47,6 +51,9 @@ Respond with ONE JSON object and nothing else (no markdown fences), exactly this
 
 
 def _text(value: Any, limit: int = 120) -> str:
+    """Free text from the imported configuration: redact secrets first, then sanitise and cap."""
+    if isinstance(value, str):
+        value = redact_secrets(value)
     return clean_text(value, limit) or ""
 
 

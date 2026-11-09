@@ -2,7 +2,13 @@ import { useRef, useState } from "react";
 
 export const MAX_FILE_BYTES = 1_000_000;
 
-export default function ImportForm({ fixtures, disabled, busy, onImportFixture, onUploadFile }) {
+export default function ImportForm({
+  fixtures,
+  disabled,
+  busy,
+  onImportFixture,
+  onUploadFile,
+}) {
   const [fixture, setFixture] = useState("");
   const [fileError, setFileError] = useState(null);
   const fileInput = useRef(null);
@@ -16,7 +22,9 @@ export default function ImportForm({ fixtures, disabled, busy, onImportFixture, 
       return;
     }
     if (file.size > MAX_FILE_BYTES) {
-      setFileError(`File is too large (limit ${MAX_FILE_BYTES / 1_000_000} MB).`);
+      setFileError(
+        `File is too large (limit ${MAX_FILE_BYTES / 1_000_000} MB).`,
+      );
       return;
     }
     let config;
@@ -32,7 +40,10 @@ export default function ImportForm({ fixtures, disabled, busy, onImportFixture, 
   return (
     <div className="space-y-6">
       <div>
-        <label htmlFor="fixture-select" className="block text-sm font-medium text-slate-700">
+        <label
+          htmlFor="fixture-select"
+          className="block text-sm font-medium text-slate-700"
+        >
           Sample configuration
         </label>
         <div className="mt-1 flex gap-2">
@@ -61,7 +72,10 @@ export default function ImportForm({ fixtures, disabled, busy, onImportFixture, 
       </div>
 
       <form onSubmit={upload}>
-        <label htmlFor="config-file" className="block text-sm font-medium text-slate-700">
+        <label
+          htmlFor="config-file"
+          className="block text-sm font-medium text-slate-700"
+        >
           Or upload a configuration (.json)
         </label>
         <div className="mt-1 flex gap-2">

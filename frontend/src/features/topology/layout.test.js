@@ -1,8 +1,24 @@
 import { describe, expect, it } from "vitest";
 
-import { BRACKET_LABEL_ROOM, COL_GAP, NODE_H, NODE_W, edgeLabel, filterTopology, graphHeight, layoutHeight, layoutTopology } from "./layout.js";
+import {
+  BRACKET_LABEL_ROOM,
+  COL_GAP,
+  NODE_H,
+  NODE_W,
+  edgeLabel,
+  filterTopology,
+  graphHeight,
+  layoutHeight,
+  layoutTopology,
+} from "./layout.js";
 
-const node = (id, type, parent = "vpc-1", data = {}) => ({ id, type, label: id, parent, data });
+const node = (id, type, parent = "vpc-1", data = {}) => ({
+  id,
+  type,
+  label: id,
+  parent,
+  data,
+});
 const edge = (source, target, kind, extra = {}) => ({
   id: `${kind}:${source}->${target}`,
   source,
@@ -72,31 +88,43 @@ describe("layoutTopology", () => {
     expect(nodes["igw-1"].position.x).toBe(nodes["rtb-1"].position.x);
     expect(nodes["igw-1"].position.y).toBeLessThan(nodes["rtb-1"].position.y);
     expect(nodes["acl-1"].position.x).toBe(nodes["subnet-a"].position.x);
-    expect(nodes["acl-1"].position.y).toBeGreaterThan(nodes["subnet-b"].position.y);
+    expect(nodes["acl-1"].position.y).toBeGreaterThan(
+      nodes["subnet-b"].position.y,
+    );
   });
 
   it("collapses empty columns (no gap when a column has no resources)", () => {
     const graph = sample();
-    graph.nodes = graph.nodes.filter((n) => n.type !== "route_table" && n.type !== "internet_gateway");
+    graph.nodes = graph.nodes.filter(
+      (n) => n.type !== "route_table" && n.type !== "internet_gateway",
+    );
     graph.edges = filterTopology(graph).edges;
     const nodes = byId(layoutTopology(graph));
     expect(nodes["subnet-a"].position.x).toBe(28); // first column starts at the VPC padding
-    expect(nodes["i-1"].position.x - nodes["subnet-a"].position.x).toBe(NODE_W + COL_GAP);
+    expect(nodes["i-1"].position.x - nodes["subnet-a"].position.x).toBe(
+      NODE_W + COL_GAP,
+    );
   });
 
   it("puts public subnets first and keeps instances next to their subnet", () => {
     const nodes = byId(layoutTopology(sample()));
-    expect(nodes["subnet-a"].position.y).toBeLessThan(nodes["subnet-b"].position.y);
+    expect(nodes["subnet-a"].position.y).toBeLessThan(
+      nodes["subnet-b"].position.y,
+    );
     expect(nodes["i-1"].position.y).toBeLessThan(nodes["i-2"].position.y);
     expect(nodes["i-1"].position.y).toBe(nodes["subnet-a"].position.y);
   });
 
   it("never overlaps nodes in the same column", () => {
-    const nodes = layoutTopology(sample()).nodes.filter((n) => n.type === "resource");
+    const nodes = layoutTopology(sample()).nodes.filter(
+      (n) => n.type === "resource",
+    );
     for (const a of nodes) {
       for (const b of nodes) {
         if (a.id < b.id && a.position.x === b.position.x) {
-          expect(Math.abs(a.position.y - b.position.y)).toBeGreaterThanOrEqual(NODE_H);
+          expect(Math.abs(a.position.y - b.position.y)).toBeGreaterThanOrEqual(
+            NODE_H,
+          );
         }
       }
     }
@@ -114,44 +142,86 @@ describe("layoutTopology", () => {
 
   it("is deterministic regardless of input order", () => {
     const forward = sample();
-    const reversed = { nodes: [...forward.nodes].reverse(), edges: [...forward.edges].reverse() };
-    const positions = (r) => Object.fromEntries(r.nodes.map((n) => [n.id, n.position]));
-    expect(positions(layoutTopology(reversed))).toEqual(positions(layoutTopology(forward)));
+    const reversed = {
+      nodes: [...forward.nodes].reverse(),
+      edges: [...forward.edges].reverse(),
+    };
+    const positions = (r) =>
+      Object.fromEntries(r.nodes.map((n) => [n.id, n.position]));
+    expect(positions(layoutTopology(reversed))).toEqual(
+      positions(layoutTopology(forward)),
+    );
   });
 
   it("stacks multiple VPCs vertically without overlap", () => {
     const graph = sample();
-    graph.nodes.push(node("vpc-2", "vpc", null), node("subnet-z", "subnet", "vpc-2", { kind: "private" }));
+    graph.nodes.push(
+      node("vpc-2", "vpc", null),
+      node("subnet-z", "subnet", "vpc-2", { kind: "private" }),
+    );
     const nodes = byId(layoutTopology(graph));
-    expect(nodes["vpc-2"].position.y).toBeGreaterThanOrEqual(nodes["vpc-1"].position.y + nodes["vpc-1"].style.height);
+    expect(nodes["vpc-2"].position.y).toBeGreaterThanOrEqual(
+      nodes["vpc-1"].position.y + nodes["vpc-1"].style.height,
+    );
   });
 
   it("places nodes with a missing VPC in a visible fallback row instead of dropping them", () => {
-    const graph = { nodes: [node("vpc-1", "vpc", null), node("sg-x", "security_group", "vpc-gone")], edges: [] };
+    const graph = {
+      nodes: [
+        node("vpc-1", "vpc", null),
+        node("sg-x", "security_group", "vpc-gone"),
+      ],
+      edges: [],
+    };
     const nodes = byId(layoutTopology(graph));
     expect(nodes["sg-x"]).toBeDefined();
     expect(nodes["sg-x"].parentId).toBeUndefined();
   });
 
   it("handles an empty topology", () => {
-    expect(layoutTopology({ nodes: [], edges: [] })).toEqual({ nodes: [], edges: [] });
+    expect(layoutTopology({ nodes: [], edges: [] })).toEqual({
+      nodes: [],
+      edges: [],
+    });
   });
 
   it("chooses edge handles by direction so lines do not run through nodes", () => {
-    const edges = Object.fromEntries(layoutTopology(sample()).edges.map((e) => [e.id, e]));
-    expect(edges["placed_in_subnet:i-1->subnet-a"]).toMatchObject({ sourceHandle: "l", targetHandle: "r" }); // instance is right of subnet
-    expect(edges["associated_route_table:subnet-a->rtb-1"]).toMatchObject({ sourceHandle: "l", targetHandle: "r" });
-    expect(edges["protected_by:i-1->sg-1"]).toMatchObject({ sourceHandle: "r", targetHandle: "l" });
+    const edges = Object.fromEntries(
+      layoutTopology(sample()).edges.map((e) => [e.id, e]),
+    );
+    expect(edges["placed_in_subnet:i-1->subnet-a"]).toMatchObject({
+      sourceHandle: "l",
+      targetHandle: "r",
+    }); // instance is right of subnet
+    expect(edges["associated_route_table:subnet-a->rtb-1"]).toMatchObject({
+      sourceHandle: "l",
+      targetHandle: "r",
+    });
+    expect(edges["protected_by:i-1->sg-1"]).toMatchObject({
+      sourceHandle: "r",
+      targetHandle: "l",
+    });
   });
 
   it("draws same-column edges as staggered brackets so shared endpoints never overlap", () => {
     const graph = sample();
-    graph.nodes.push(node("sg-2", "security_group"), node("sg-3", "security_group"));
-    graph.edges.push(
-      edge("sg-1", "sg-3", "sg_traffic", { label: "tcp/1", data: { sides: "both" } }),
-      edge("sg-2", "sg-3", "sg_traffic", { label: "tcp/2", data: { sides: "both" } }),
+    graph.nodes.push(
+      node("sg-2", "security_group"),
+      node("sg-3", "security_group"),
     );
-    const flows = layoutTopology(graph).edges.filter((e) => e.data.kind === "sg_traffic");
+    graph.edges.push(
+      edge("sg-1", "sg-3", "sg_traffic", {
+        label: "tcp/1",
+        data: { sides: "both" },
+      }),
+      edge("sg-2", "sg-3", "sg_traffic", {
+        label: "tcp/2",
+        data: { sides: "both" },
+      }),
+    );
+    const flows = layoutTopology(graph).edges.filter(
+      (e) => e.data.kind === "sg_traffic",
+    );
     expect(flows).toHaveLength(2);
     for (const f of flows) {
       expect(f.type).toBe("smoothstep");
@@ -161,7 +231,9 @@ describe("layoutTopology", () => {
   });
 
   it("keeps cross-column edges as default curves", () => {
-    const edges = layoutTopology(sample()).edges.filter((e) => e.data.kind === "protected_by");
+    const edges = layoutTopology(sample()).edges.filter(
+      (e) => e.data.kind === "protected_by",
+    );
     expect(edges.every((e) => e.type === undefined)).toBe(true);
   });
 });
@@ -180,33 +252,58 @@ describe("bracket room", () => {
     const plain = byId(layoutTopology(sample()))["vpc-1"].style.width;
     const graph = sample();
     graph.nodes.push(node("sg-2", "security_group"));
-    graph.edges.push(edge("sg-1", "sg-2", "sg_traffic", { label: "tcp/1", data: { sides: "both" } }));
+    graph.edges.push(
+      edge("sg-1", "sg-2", "sg_traffic", {
+        label: "tcp/1",
+        data: { sides: "both" },
+      }),
+    );
     const withTraffic = byId(layoutTopology(graph))["vpc-1"].style.width;
     expect(withTraffic).toBeGreaterThan(plain + BRACKET_LABEL_ROOM);
   });
 
   it("keeps every bracket inside the VPC box", () => {
     const graph = sample();
-    for (let i = 2; i <= 7; i += 1) graph.nodes.push(node(`sg-${i}`, "security_group"));
-    for (let i = 2; i <= 7; i += 1) graph.edges.push(edge("sg-1", `sg-${i}`, "sg_traffic", { label: "tcp/1", data: { sides: "both" } }));
+    for (let i = 2; i <= 7; i += 1)
+      graph.nodes.push(node(`sg-${i}`, "security_group"));
+    for (let i = 2; i <= 7; i += 1)
+      graph.edges.push(
+        edge("sg-1", `sg-${i}`, "sg_traffic", {
+          label: "tcp/1",
+          data: { sides: "both" },
+        }),
+      );
     const result = layoutTopology(graph);
     const vpc = byId(result)["vpc-1"];
     const sg = byId(result)["sg-1"];
-    const farthest = Math.max(...result.edges.filter((e) => e.pathOptions).map((e) => e.pathOptions.offset));
-    expect(sg.position.x + NODE_W + farthest + BRACKET_LABEL_ROOM / 2).toBeLessThanOrEqual(vpc.style.width);
+    const farthest = Math.max(
+      ...result.edges
+        .filter((e) => e.pathOptions)
+        .map((e) => e.pathOptions.offset),
+    );
+    expect(
+      sg.position.x + NODE_W + farthest + BRACKET_LABEL_ROOM / 2,
+    ).toBeLessThanOrEqual(vpc.style.width);
   });
 });
 
 describe("graphHeight", () => {
   it("stays within bounds for tiny and huge graphs", () => {
     expect(graphHeight({ nodes: [], edges: [] })).toBe(360);
-    const many = { nodes: [node("vpc-1", "vpc", null), ...Array.from({ length: 40 }, (_, i) => node(`i-${i}`, "instance"))], edges: [] };
+    const many = {
+      nodes: [
+        node("vpc-1", "vpc", null),
+        ...Array.from({ length: 40 }, (_, i) => node(`i-${i}`, "instance")),
+      ],
+      edges: [],
+    };
     expect(graphHeight(many)).toBe(760);
   });
 });
 
 describe("edge presentation", () => {
-  const flow = (sides) => edge("sg-a", "sg-b", "sg_traffic", { label: "tcp/5432", data: { sides } });
+  const flow = (sides) =>
+    edge("sg-a", "sg-b", "sg_traffic", { label: "tcp/5432", data: { sides } });
 
   it("labels one-sided flows in text, not only colour", () => {
     expect(edgeLabel(flow("both"))).toBe("tcp/5432");
@@ -216,11 +313,20 @@ describe("edge presentation", () => {
 
   it("does not label plain association edges or the internet attachment", () => {
     expect(edgeLabel(edge("a", "b", "protected_by"))).toBe("");
-    expect(edgeLabel(edge("internet", "igw-1", "attached", { label: "attached" }))).toBe("");
+    expect(
+      edgeLabel(edge("internet", "igw-1", "attached", { label: "attached" })),
+    ).toBe("");
   });
 
   it("styles one-sided flows differently from agreed ones", () => {
-    const graph = { nodes: [node("vpc-1", "vpc", null), node("sg-a", "security_group"), node("sg-b", "security_group")], edges: [flow("both"), { ...flow("egress_only"), id: "x" }] };
+    const graph = {
+      nodes: [
+        node("vpc-1", "vpc", null),
+        node("sg-a", "security_group"),
+        node("sg-b", "security_group"),
+      ],
+      edges: [flow("both"), { ...flow("egress_only"), id: "x" }],
+    };
     const [agreed, oneSided] = layoutTopology(graph).edges;
     expect(agreed.style.stroke).not.toBe(oneSided.style.stroke);
   });
@@ -228,7 +334,10 @@ describe("edge presentation", () => {
 
 describe("filterTopology", () => {
   it("hides types and the edges attached to them", () => {
-    const { nodes, edges } = filterTopology(sample(), new Set(["security_group"]));
+    const { nodes, edges } = filterTopology(
+      sample(),
+      new Set(["security_group"]),
+    );
     expect(nodes.find((n) => n.id === "sg-1")).toBeUndefined();
     expect(edges.some((e) => e.target === "sg-1")).toBe(false);
     expect(edges.some((e) => e.kind === "placed_in_subnet")).toBe(true);
@@ -236,6 +345,9 @@ describe("filterTopology", () => {
 
   it("returns everything when nothing is hidden", () => {
     const graph = sample();
-    expect(filterTopology(graph)).toEqual({ nodes: graph.nodes, edges: graph.edges });
+    expect(filterTopology(graph)).toEqual({
+      nodes: graph.nodes,
+      edges: graph.edges,
+    });
   });
 });

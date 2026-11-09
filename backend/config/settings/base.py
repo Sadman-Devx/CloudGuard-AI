@@ -111,12 +111,19 @@ REST_FRAMEWORK = {
     # MVP has no user accounts; every endpoint is open. Tighten before multi-user.
     "DEFAULT_AUTHENTICATION_CLASSES": [],
     "DEFAULT_PERMISSION_CLASSES": ["rest_framework.permissions.AllowAny"],
-    "DEFAULT_THROTTLE_CLASSES": [],
+    # Every state-changing request counts against one per-client "write" budget. The expensive
+    # views add their own scoped budget (throttle_scope = "ai_explain" / "simulate").
+    "DEFAULT_THROTTLE_CLASSES": ["common.throttles.WriteThrottle"],
     "DEFAULT_THROTTLE_RATES": {
+        "write": os.environ.get("WRITE_RATE", "60/min"),
         "ai_explain": os.environ.get("AI_EXPLAIN_RATE", "30/min"),
         # Simulations are pure CPU (no model call) but each one writes a row; keep them bounded.
         "simulate": os.environ.get("SIMULATE_RATE", "60/min"),
     },
+    # How many trusted reverse proxies sit in front of the app. 0 = use the socket address and
+    # ignore X-Forwarded-For (a client can forge that header to dodge rate limits). Behind one
+    # platform proxy (Render, Fly, Railway...) set NUM_PROXIES=1.
+    "NUM_PROXIES": int(os.environ.get("NUM_PROXIES", 0)),
 }
 
 SPECTACULAR_SETTINGS = {

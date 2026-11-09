@@ -3,12 +3,18 @@
 export function portText(rule) {
   if (rule.protocol === "-1") return "all traffic";
   if (rule.from_port == null) return rule.protocol;
-  const ports = rule.from_port === rule.to_port ? `${rule.from_port}` : `${rule.from_port}-${rule.to_port}`;
+  const ports =
+    rule.from_port === rule.to_port
+      ? `${rule.from_port}`
+      : `${rule.from_port}-${rule.to_port}`;
   return `${rule.protocol}/${ports}`;
 }
 
 export function describeSgRule(rule, direction) {
-  const peer = direction === "ingress" ? rule.source_security_group_id : rule.destination_security_group_id;
+  const peer =
+    direction === "ingress"
+      ? rule.source_security_group_id
+      : rule.destination_security_group_id;
   const target = peer ?? rule.cidr;
   const arrow = direction === "ingress" ? "from" : "to";
   return `${portText(rule)} ${arrow} ${target}`;
@@ -55,19 +61,32 @@ export function detailRows(node) {
   const data = node.data ?? {};
   const rows = [];
   for (const [key, value] of Object.entries(data)) {
-    if (HIDDEN_FIELDS.has(key) || value === null || value === undefined || value === "") continue;
+    if (
+      HIDDEN_FIELDS.has(key) ||
+      value === null ||
+      value === undefined ||
+      value === ""
+    )
+      continue;
     if (key in LIST_FIELDS) {
       const [label, fn] = LIST_FIELDS[key];
       const format =
         fn ??
-        (node.type === "network_acl" ? describeNaclRule : (rule) => describeSgRule(rule, key));
+        (node.type === "network_acl"
+          ? describeNaclRule
+          : (rule) => describeSgRule(rule, key));
       if (value.length) rows.push({ label, values: value.map(format) });
       continue;
     }
     const label = FIELD_LABELS[key] ?? key;
     if (Array.isArray(value)) rows.push({ label, values: value.map(String) });
-    else if (typeof value === "object") rows.push({ label, values: Object.entries(value).map(([k, v]) => `${k}: ${v}`) });
-    else if (typeof value === "boolean") rows.push({ label, values: [value ? "yes" : "no"] });
+    else if (typeof value === "object")
+      rows.push({
+        label,
+        values: Object.entries(value).map(([k, v]) => `${k}: ${v}`),
+      });
+    else if (typeof value === "boolean")
+      rows.push({ label, values: [value ? "yes" : "no"] });
     else rows.push({ label, values: [String(value)] });
   }
   return rows;

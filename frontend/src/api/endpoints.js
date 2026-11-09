@@ -57,3 +57,10 @@ export const explainFinding = async (findingId, { refresh = false } = {}) =>
       body: { refresh },
     })
   ).interaction;
+
+// ---- Day 6/8: simulation of a proposed change (never touches a cloud account)
+export const runSimulation = (snapshotId, interactionId) =>
+  apiRequest(`/api/snapshots/${snapshotId}/simulations/`, {
+    method: "POST",
+    body: { interaction_id: interactionId },
+  });

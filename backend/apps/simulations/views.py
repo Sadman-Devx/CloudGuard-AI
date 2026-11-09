@@ -16,15 +16,14 @@ from .serializers import SimulationListSerializer, SimulationRequestSerializer, 
 from .services.simulate import SimulationInputError, SnapshotIncompatible, check_path, run_simulation
 
 
-class _SimulationThrottle(ScopedRateThrottle):
-    scope = "simulate"
-
-
 class SnapshotSimulationsView(generics.ListAPIView):
     """GET lists a snapshot's simulations; POST runs a new one. Nothing is ever applied."""
 
     serializer_class = SimulationListSerializer
-    throttle_classes = [_SimulationThrottle]
+    # ScopedRateThrottle reads the scope from the *view*; a scope set on a throttle subclass is
+    # ignored and the limit silently never applies.
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "simulate"
 
     def get_throttles(self):
         return super().get_throttles() if self.request.method == "POST" else []
@@ -79,7 +78,8 @@ class SimulationDetailView(generics.RetrieveAPIView):
 class SnapshotReachabilityView(APIView):
     """Ask one question of the unmodified snapshot: can X reach Y on tcp/5432?"""
 
-    throttle_classes = [_SimulationThrottle]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "simulate"
 
     @extend_schema(request=dict, responses={200: dict}, tags=["simulation"])
     def post(self, request, pk):

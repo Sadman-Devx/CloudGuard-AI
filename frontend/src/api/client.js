@@ -30,8 +30,18 @@ async function readJson(response) {
  *          acceptStatuses?: number[]}} [options] acceptStatuses: non-2xx codes whose body is returned as data.
  */
 export async function apiRequest(path, options = {}) {
-  const { method = "GET", body, headers = {}, signal, acceptStatuses = [] } = options;
-  const init = { method, signal, headers: { Accept: "application/json", ...headers } };
+  const {
+    method = "GET",
+    body,
+    headers = {},
+    signal,
+    acceptStatuses = [],
+  } = options;
+  const init = {
+    method,
+    signal,
+    headers: { Accept: "application/json", ...headers },
+  };
   if (body !== undefined) {
     init.headers["Content-Type"] = "application/json";
     init.body = JSON.stringify(body);

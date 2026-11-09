@@ -1,6 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
 
-import { createProject, importFixture, listFixtures, listProjects, uploadConfig } from "../api/endpoints.js";
+import {
+  createProject,
+  importFixture,
+  listFixtures,
+  listProjects,
+  uploadConfig,
+} from "../api/endpoints.js";
 import Notice from "../components/Notice.jsx";
 import ImportForm from "../features/import/ImportForm.jsx";
 import SnapshotSummary from "../features/import/SnapshotSummary.jsx";
@@ -19,7 +25,10 @@ export default function ImportPage({ onViewTopology }) {
 
   useEffect(() => {
     const controller = new AbortController();
-    Promise.all([listProjects(controller.signal), listFixtures(controller.signal)])
+    Promise.all([
+      listProjects(controller.signal),
+      listFixtures(controller.signal),
+    ])
       .then(([projectList, fixtureList]) => {
         setProjects(projectList);
         setFixtures(fixtureList);
@@ -54,7 +63,8 @@ export default function ImportPage({ onViewTopology }) {
     return true;
   };
 
-  const handleImportFixture = async (name) => setSnapshot(await run(() => importFixture(projectId, name)));
+  const handleImportFixture = async (name) =>
+    setSnapshot(await run(() => importFixture(projectId, name)));
   const handleUpload = async (config, fileName) =>
     setSnapshot(await run(() => uploadConfig(projectId, config, fileName)));
 
@@ -74,13 +84,17 @@ export default function ImportPage({ onViewTopology }) {
   }
 
   return (
-    <section aria-labelledby="import-heading" className="mx-auto max-w-3xl space-y-6">
+    <section
+      aria-labelledby="import-heading"
+      className="mx-auto max-w-3xl space-y-6"
+    >
       <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
         <h2 id="import-heading" className="text-lg font-semibold">
           Import a network configuration
         </h2>
         <p className="mt-1 text-sm text-slate-500">
-          Configurations are validated and stored as immutable snapshots. Nothing is sent to AWS.
+          Configurations are validated and stored as immutable snapshots.
+          Nothing is sent to AWS.
         </p>
 
         <div className="mt-5 space-y-6">
@@ -98,7 +112,11 @@ export default function ImportPage({ onViewTopology }) {
             onImportFixture={handleImportFixture}
             onUploadFile={handleUpload}
           />
-          {!projectId && <p className="text-sm text-slate-500">Create or select a project to enable importing.</p>}
+          {!projectId && (
+            <p className="text-sm text-slate-500">
+              Create or select a project to enable importing.
+            </p>
+          )}
         </div>
       </div>
 
@@ -108,7 +126,9 @@ export default function ImportPage({ onViewTopology }) {
         </p>
       )}
       {error && <ValidationErrors error={error} />}
-      {snapshot && <SnapshotSummary snapshot={snapshot} onViewTopology={onViewTopology} />}
+      {snapshot && (
+        <SnapshotSummary snapshot={snapshot} onViewTopology={onViewTopology} />
+      )}
     </section>
   );
 }

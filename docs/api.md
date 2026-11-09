@@ -16,6 +16,9 @@ Every response carries `X-Request-ID` (a well-formed client-supplied ID is echoe
 | 400 | `validation_error` / `parse_error` | Bad request fields / malformed or too deeply nested JSON |
 | 404 | `not_found` | Unknown project / snapshot |
 | 413 | `payload_too_large` | Body larger than `MAX_UPLOAD_BYTES` |
+| 404 | `not_found` | Unknown URL or object (JSON for every `/api/` path) |
+| 429 | `throttled` | Rate limit hit; honour the `Retry-After` header |
+| 500 | `internal_error` | Unexpected server error; quote the `request_id` when reporting it |
 | 415 | `unsupported_media_type` | Not `application/json` |
 | 422 | `invalid_configuration` | Config failed validation; `details` = `[{path, code, message}]`. **Nothing is stored.** |
 

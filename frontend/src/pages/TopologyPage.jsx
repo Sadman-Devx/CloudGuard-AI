@@ -29,17 +29,24 @@ export default function TopologyPage({ focus = null }) {
   const [selection, setSelection] = useState(null);
 
   const projects = useAsyncData("projects", listProjects);
-  const projectId = chosenProject ?? focus?.projectId ?? projects.data?.[0]?.id ?? null;
+  const projectId =
+    chosenProject ?? focus?.projectId ?? projects.data?.[0]?.id ?? null;
 
-  const snapshots = useAsyncData(projectId, (signal) => listSnapshots(projectId, signal));
+  const snapshots = useAsyncData(projectId, (signal) =>
+    listSnapshots(projectId, signal),
+  );
   const snapshotId =
     chosenSnapshot && snapshots.data?.some((s) => s.id === chosenSnapshot)
       ? chosenSnapshot
-      : focus && focus.projectId === projectId && snapshots.data?.some((s) => s.id === focus.snapshotId)
+      : focus &&
+          focus.projectId === projectId &&
+          snapshots.data?.some((s) => s.id === focus.snapshotId)
         ? focus.snapshotId
         : (snapshots.data?.[0]?.id ?? null);
 
-  const topology = useAsyncData(snapshotId, (signal) => getTopology(snapshotId, signal));
+  const topology = useAsyncData(snapshotId, (signal) =>
+    getTopology(snapshotId, signal),
+  );
 
   const toggleType = (type) =>
     setHiddenTypes((current) => {
@@ -51,7 +58,10 @@ export default function TopologyPage({ focus = null }) {
 
   const summary = topology.data?.summary;
   const oneSided = summary?.one_sided_sg_flows ?? [];
-  const names = useMemo(() => new Map((topology.data?.nodes ?? []).map((n) => [n.id, n.label])), [topology.data]);
+  const names = useMemo(
+    () => new Map((topology.data?.nodes ?? []).map((n) => [n.id, n.label])),
+    [topology.data],
+  );
 
   const loadError = projects.error ?? snapshots.error;
   if (loadError) {
@@ -77,12 +87,15 @@ export default function TopologyPage({ focus = null }) {
             Network topology
           </h2>
           <p className="text-sm text-slate-500">
-            Shows how the imported configuration is wired together. It does not prove that any path is reachable.
+            Shows how the imported configuration is wired together. It does not
+            prove that any path is reachable.
           </p>
         </div>
         <div className="flex flex-wrap gap-3">
           <label className="text-sm">
-            <span className="block text-xs font-medium text-slate-500">Project</span>
+            <span className="block text-xs font-medium text-slate-500">
+              Project
+            </span>
             <select
               value={projectId ?? ""}
               onChange={(e) => {
@@ -100,7 +113,9 @@ export default function TopologyPage({ focus = null }) {
             </select>
           </label>
           <label className="text-sm">
-            <span className="block text-xs font-medium text-slate-500">Snapshot</span>
+            <span className="block text-xs font-medium text-slate-500">
+              Snapshot
+            </span>
             <select
               value={snapshotId ?? ""}
               onChange={(e) => {
@@ -145,9 +160,19 @@ export default function TopologyPage({ focus = null }) {
         <>
           <dl className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             <Stat label="Resources" value={summary.node_count} />
-            <Stat label="Public subnets" value={summary.public_subnets.length} />
-            <Stat label="Instances with public IP" value={summary.instances_with_public_ip.length} />
-            <Stat label="One-sided SG rules" value={oneSided.length} tone={oneSided.length ? "warn" : "default"} />
+            <Stat
+              label="Public subnets"
+              value={summary.public_subnets.length}
+            />
+            <Stat
+              label="Instances with public IP"
+              value={summary.instances_with_public_ip.length}
+            />
+            <Stat
+              label="One-sided SG rules"
+              value={oneSided.length}
+              tone={oneSided.length ? "warn" : "default"}
+            />
           </dl>
 
           {oneSided.length > 0 && (
@@ -157,7 +182,8 @@ export default function TopologyPage({ focus = null }) {
                   const [from, to] = flow.split("->");
                   return (
                     <li key={flow}>
-                      {names.get(from) ?? from} → {names.get(to) ?? to}: only one side declares the rule.
+                      {names.get(from) ?? from} → {names.get(to) ?? to}: only
+                      one side declares the rule.
                     </li>
                   );
                 })}
@@ -165,7 +191,10 @@ export default function TopologyPage({ focus = null }) {
             </Notice>
           )}
           {topology.data.issues.length > 0 && (
-            <Notice tone="warning" title={`${topology.data.issues.length} reference problem(s) in this snapshot`}>
+            <Notice
+              tone="warning"
+              title={`${topology.data.issues.length} reference problem(s) in this snapshot`}
+            >
               <ul className="list-disc pl-5">
                 {topology.data.issues.map((issue, i) => (
                   <li key={i}>{issue.message}</li>
@@ -180,7 +209,12 @@ export default function TopologyPage({ focus = null }) {
           </div>
 
           <div className="grid gap-4 xl:grid-cols-[1fr_300px]">
-            <TopologyGraph topology={topology.data} hiddenTypes={hiddenTypes} selection={selection} onSelect={setSelection} />
+            <TopologyGraph
+              topology={topology.data}
+              hiddenTypes={hiddenTypes}
+              selection={selection}
+              onSelect={setSelection}
+            />
             <DetailPanel
               topology={topology.data}
               selection={selection}

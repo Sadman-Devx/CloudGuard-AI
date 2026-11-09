@@ -30,5 +30,8 @@ CloudGuard is **read-only by design**: no AWS credentials, no write path to clou
 ## Known gaps (tracked)
 
 - No authentication or per-project authorization yet (single-demo-workspace MVP). Do not store sensitive data.
-- No rate limiting yet (planned Day 8, required before the AI endpoint ships).
+- Rate-limit counters live in each process's memory, so the container runs one gunicorn worker (with threads).
+  Move the cache to Redis before scaling out.
+- Redaction is pattern based and best effort; do not paste credentials into labels.
+- Every endpoint is open (no accounts). Add authentication and per-project checks before multi-user use.
 - The simplified model is not an authoritative AWS reachability proof.

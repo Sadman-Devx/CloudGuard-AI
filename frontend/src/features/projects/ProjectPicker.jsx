@@ -1,6 +1,12 @@
 import { useState } from "react";
 
-export default function ProjectPicker({ projects, selectedId, onSelect, onCreate, busy }) {
+export default function ProjectPicker({
+  projects,
+  selectedId,
+  onSelect,
+  onCreate,
+  busy,
+}) {
   const [name, setName] = useState("");
 
   const submit = async (event) => {
@@ -14,16 +20,23 @@ export default function ProjectPicker({ projects, selectedId, onSelect, onCreate
   return (
     <div className="space-y-3">
       <div>
-        <label htmlFor="project-select" className="block text-sm font-medium text-slate-700">
+        <label
+          htmlFor="project-select"
+          className="block text-sm font-medium text-slate-700"
+        >
           Project
         </label>
         <select
           id="project-select"
           value={selectedId ?? ""}
-          onChange={(e) => onSelect(e.target.value ? Number(e.target.value) : null)}
+          onChange={(e) =>
+            onSelect(e.target.value ? Number(e.target.value) : null)
+          }
           className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm"
         >
-          <option value="">{projects.length ? "Select a project…" : "No projects yet"}</option>
+          <option value="">
+            {projects.length ? "Select a project…" : "No projects yet"}
+          </option>
           {projects.map((p) => (
             <option key={p.id} value={p.id}>
               {p.name}

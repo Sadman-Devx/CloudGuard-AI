@@ -11,7 +11,12 @@ export function mockFetch(routes) {
     const key = `${method} ${url}`;
     const handler = routes[key];
     if (!handler) throw new Error(`Unexpected request: ${key}`);
-    const request = { url, method, headers: init.headers ?? {}, body: init.body ? JSON.parse(init.body) : undefined };
+    const request = {
+      url,
+      method,
+      headers: init.headers ?? {},
+      body: init.body ? JSON.parse(init.body) : undefined,
+    };
     calls.push(request);
     const { status = 200, body = null } = (await handler(request)) ?? {};
     return new Response(body === null ? "" : JSON.stringify(body), { status });

@@ -4,10 +4,19 @@ export default function Filters({ hiddenTypes, onToggle }) {
   return (
     <fieldset className="flex flex-wrap items-center gap-x-4 gap-y-1">
       <legend className="sr-only">Show resource types</legend>
-      <span className="text-xs font-medium uppercase tracking-wide text-slate-500">Show</span>
+      <span className="text-xs font-medium uppercase tracking-wide text-slate-500">
+        Show
+      </span>
       {FILTERABLE_TYPES.map((type) => (
-        <label key={type} className="flex items-center gap-1.5 text-sm text-slate-700">
-          <input type="checkbox" checked={!hiddenTypes.has(type)} onChange={() => onToggle(type)} />
+        <label
+          key={type}
+          className="flex items-center gap-1.5 text-sm text-slate-700"
+        >
+          <input
+            type="checkbox"
+            checked={!hiddenTypes.has(type)}
+            onChange={() => onToggle(type)}
+          />
           {TYPE_LABELS[type]}s
         </label>
       ))}
@@ -25,10 +34,15 @@ export function Legend() {
     ["border-l-rose-400", "Security group"],
   ];
   return (
-    <ul aria-label="Legend" className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-600">
+    <ul
+      aria-label="Legend"
+      className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-600"
+    >
       {items.map(([accent, label]) => (
         <li key={label} className="flex items-center gap-1.5">
-          <span className={`inline-block h-3 w-3 rounded-sm border border-l-4 border-slate-300 ${accent}`} />
+          <span
+            className={`inline-block h-3 w-3 rounded-sm border border-l-4 border-slate-300 ${accent}`}
+          />
           {label}
         </li>
       ))}

@@ -13,6 +13,7 @@ from .serializers import CloudResourceSerializer, FixtureImportSerializer, Snaps
 from .services.fixtures import FixtureNotFound, list_fixtures, load_fixture
 from .services.snapshots import import_snapshot
 from .services.topology import SnapshotIncompatible, snapshot_topology
+from common.sanitize import strip_control_chars
 
 
 class ProjectSnapshotsView(generics.ListAPIView):
@@ -31,7 +32,7 @@ class ProjectSnapshotsView(generics.ListAPIView):
             project,
             request.data,
             source_type=ConfigurationSnapshot.SourceType.UPLOAD,
-            source_name=request.headers.get("X-Source-Name", "")[:128],
+            source_name=strip_control_chars(request.headers.get("X-Source-Name", ""))[:128],
         )
         return Response(SnapshotSerializer(snapshot).data, status=status.HTTP_201_CREATED)
 

@@ -18,11 +18,20 @@ export const BRACKET_LABEL_ROOM = 96;
 
 // Resource types sharing a column are stacked top to bottom in this order. Four columns keep the
 // graph compact enough to stay legible when fitted to the screen.
-export const COLUMN_GROUPS = [["internet_gateway", "route_table"], ["subnet", "network_acl"], ["instance"], ["security_group"]];
+export const COLUMN_GROUPS = [
+  ["internet_gateway", "route_table"],
+  ["subnet", "network_acl"],
+  ["instance"],
+  ["security_group"],
+];
 export const COLUMN_ORDER = COLUMN_GROUPS.flat();
 
 /** Resource types the user may hide to reduce clutter. */
-export const FILTERABLE_TYPES = ["route_table", "network_acl", "security_group"];
+export const FILTERABLE_TYPES = [
+  "route_table",
+  "network_acl",
+  "security_group",
+];
 
 export const TYPE_LABELS = {
   internet: "Internet",
@@ -58,13 +67,18 @@ export function layoutHeight(rfNodes) {
 export function filterTopology(topology, hiddenTypes = new Set()) {
   const nodes = topology.nodes.filter((n) => !hiddenTypes.has(n.type));
   const ids = new Set(nodes.map((n) => n.id));
-  const edges = topology.edges.filter((e) => ids.has(e.source) && ids.has(e.target));
+  const edges = topology.edges.filter(
+    (e) => ids.has(e.source) && ids.has(e.target),
+  );
   return { nodes, edges };
 }
 
 export function edgeLabel(edge) {
   if (edge.kind === "sg_traffic") {
-    const suffix = { ingress_only: " · ingress only", egress_only: " · egress only" }[edge.data?.sides] ?? "";
+    const suffix =
+      { ingress_only: " · ingress only", egress_only: " · egress only" }[
+        edge.data?.sides
+      ] ?? "";
     return `${edge.label}${suffix}`;
   }
   if (edge.kind === "routes_via") return edge.label;
@@ -84,26 +98,43 @@ function orderBy(items, keyOf) {
 
 function firstIndex(edges, nodeId, role, indexOf) {
   const other = role === "source" ? "target" : "source";
-  const indexes = edges.filter((e) => e[role] === nodeId && indexOf.has(e[other])).map((e) => indexOf.get(e[other]));
+  const indexes = edges
+    .filter((e) => e[role] === nodeId && indexOf.has(e[other]))
+    .map((e) => indexOf.get(e[other]));
   return indexes.length ? Math.min(...indexes) : Number.MAX_SAFE_INTEGER;
 }
 
 /** Order the nodes of each column to keep connected nodes on nearby rows (fewer edge crossings). */
 function orderColumns(children, edges) {
   const byType = (type) => children.filter((n) => n.type === type);
-  const subnets = orderBy(byType("subnet"), (n) => [n.data?.kind === "public" ? 0 : 1, n.id]);
+  const subnets = orderBy(byType("subnet"), (n) => [
+    n.data?.kind === "public" ? 0 : 1,
+    n.id,
+  ]);
   const subnetIndex = new Map(subnets.map((n, i) => [n.id, i]));
 
-  const instances = orderBy(byType("instance"), (n) => [firstIndex(edges, n.id, "source", subnetIndex), n.id]);
+  const instances = orderBy(byType("instance"), (n) => [
+    firstIndex(edges, n.id, "source", subnetIndex),
+    n.id,
+  ]);
   const instanceIndex = new Map(instances.map((n, i) => [n.id, i]));
 
   return {
     internet_gateway: orderBy(byType("internet_gateway"), (n) => [n.id]),
-    route_table: orderBy(byType("route_table"), (n) => [firstIndex(edges, n.id, "target", subnetIndex), n.id]),
+    route_table: orderBy(byType("route_table"), (n) => [
+      firstIndex(edges, n.id, "target", subnetIndex),
+      n.id,
+    ]),
     subnet: subnets,
-    network_acl: orderBy(byType("network_acl"), (n) => [firstIndex(edges, n.id, "target", subnetIndex), n.id]),
+    network_acl: orderBy(byType("network_acl"), (n) => [
+      firstIndex(edges, n.id, "target", subnetIndex),
+      n.id,
+    ]),
     instance: instances,
-    security_group: orderBy(byType("security_group"), (n) => [firstIndex(edges, n.id, "target", instanceIndex), n.id]),
+    security_group: orderBy(byType("security_group"), (n) => [
+      firstIndex(edges, n.id, "target", instanceIndex),
+      n.id,
+    ]),
   };
 }
 
@@ -114,23 +145,35 @@ function orderColumns(children, edges) {
 export function layoutTopology({ nodes, edges }) {
   const rfNodes = [];
   const column = new Map(); // node id -> absolute column index (for choosing edge handles)
-  const vpcs = orderBy(nodes.filter((n) => n.type === "vpc"), (n) => [n.id]);
+  const vpcs = orderBy(
+    nodes.filter((n) => n.type === "vpc"),
+    (n) => [n.id],
+  );
   const vpcIds = new Set(vpcs.map((v) => v.id));
   const internet = nodes.find((n) => n.type === "internet");
 
   const originX = internet ? NODE_W + 72 : 0;
   const trafficEdges = edges.filter((e) => e.kind === "sg_traffic").length;
-  const gutter = trafficEdges ? BRACKET_BASE + BRACKET_STEP * Math.min(trafficEdges, BRACKET_STAGGER) + BRACKET_LABEL_ROOM : 0;
+  const gutter = trafficEdges
+    ? BRACKET_BASE +
+      BRACKET_STEP * Math.min(trafficEdges, BRACKET_STAGGER) +
+      BRACKET_LABEL_ROOM
+    : 0;
   let cursorY = 0;
   const vpcBoxes = [];
 
   for (const vpc of vpcs) {
     const children = nodes.filter((n) => n.parent === vpc.id);
     const ordered = orderColumns(children, edges);
-    const columns = COLUMN_GROUPS.map((types) => types.flatMap((type) => ordered[type])).filter((c) => c.length > 0);
+    const columns = COLUMN_GROUPS.map((types) =>
+      types.flatMap((type) => ordered[type]),
+    ).filter((c) => c.length > 0);
     const rows = Math.max(1, ...columns.map((c) => c.length));
     const width =
-      VPC_PAD * 2 + Math.max(1, columns.length) * NODE_W + Math.max(0, columns.length - 1) * COL_GAP + gutter;
+      VPC_PAD * 2 +
+      Math.max(1, columns.length) * NODE_W +
+      Math.max(0, columns.length - 1) * COL_GAP +
+      gutter;
     const height = VPC_HEADER + VPC_PAD + rows * NODE_H + (rows - 1) * ROW_GAP;
 
     rfNodes.push({
@@ -177,7 +220,9 @@ export function layoutTopology({ nodes, edges }) {
 
   // Anything not inside a defined VPC (only possible for malformed data) goes in a row below.
   const orphans = orderBy(
-    nodes.filter((n) => n.type !== "vpc" && n.type !== "internet" && !vpcIds.has(n.parent)),
+    nodes.filter(
+      (n) => n.type !== "vpc" && n.type !== "internet" && !vpcIds.has(n.parent),
+    ),
     (n) => [n.id],
   );
   orphans.forEach((node, index) => {
@@ -193,26 +238,52 @@ export function layoutTopology({ nodes, edges }) {
 
   let bracket = 0;
   const rfEdges = edges.map((edge) => {
-    const [from, to] = [column.get(edge.source) ?? 0, column.get(edge.target) ?? 0];
+    const [from, to] = [
+      column.get(edge.source) ?? 0,
+      column.get(edge.target) ?? 0,
+    ];
     const sameColumn = from === to;
     const forward = from < to;
     const oneSided = edge.kind === "sg_traffic" && edge.data?.sides !== "both";
     // Edges inside one column leave and re-enter on the same side as a bracket. Stagger the bracket
     // width so edges that share an endpoint never lie on top of each other.
-    const side = edge.kind === "sg_traffic" || edge.kind === "associated_network_acl" ? "r" : "l";
+    const side =
+      edge.kind === "sg_traffic" || edge.kind === "associated_network_acl"
+        ? "r"
+        : "l";
     const handles = sameColumn
       ? { sourceHandle: side, targetHandle: side }
-      : { sourceHandle: forward ? "r" : "l", targetHandle: forward ? "l" : "r" };
+      : {
+          sourceHandle: forward ? "r" : "l",
+          targetHandle: forward ? "l" : "r",
+        };
     return {
       id: edge.id,
       source: edge.source,
       target: edge.target,
       ...handles,
-      ...(sameColumn ? { type: "smoothstep", pathOptions: { offset: BRACKET_BASE + BRACKET_STEP * (bracket++ % BRACKET_STAGGER), borderRadius: 10 } } : {}),
+      ...(sameColumn
+        ? {
+            type: "smoothstep",
+            pathOptions: {
+              offset:
+                BRACKET_BASE + BRACKET_STEP * (bracket++ % BRACKET_STAGGER),
+              borderRadius: 10,
+            },
+          }
+        : {}),
       label: edgeLabel(edge),
       data: edge,
-      style: { ...EDGE_STYLES[edge.kind], ...(oneSided ? { stroke: ONE_SIDED_STROKE, strokeDasharray: "8 4" } : {}) },
-      labelStyle: { fontSize: 11, fill: oneSided ? ONE_SIDED_STROKE : "#334155" },
+      style: {
+        ...EDGE_STYLES[edge.kind],
+        ...(oneSided
+          ? { stroke: ONE_SIDED_STROKE, strokeDasharray: "8 4" }
+          : {}),
+      },
+      labelStyle: {
+        fontSize: 11,
+        fill: oneSided ? ONE_SIDED_STROKE : "#334155",
+      },
       labelBgPadding: [4, 2],
       labelBgBorderRadius: 4,
       zIndex: 2,
@@ -224,6 +295,8 @@ export function layoutTopology({ nodes, edges }) {
 
 /** Container height for a topology: fits the content, within sensible bounds. */
 export function graphHeight(topology, hiddenTypes = new Set()) {
-  const height = layoutHeight(layoutTopology(filterTopology(topology, hiddenTypes)).nodes);
+  const height = layoutHeight(
+    layoutTopology(filterTopology(topology, hiddenTypes)).nodes,
+  );
   return Math.min(760, Math.max(360, height + 120));
 }

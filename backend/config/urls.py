@@ -4,6 +4,9 @@ from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
 
 from common.views import health
 
+handler404 = "common.views.api_not_found"
+handler500 = "common.views.api_server_error"
+
 urlpatterns = [
     path("admin/", admin.site.urls),
     path("api/health/", health, name="health"),

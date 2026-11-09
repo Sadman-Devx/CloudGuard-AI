@@ -28,7 +28,10 @@ export default function StatusPage() {
           <h2 id="status-heading" className="text-lg font-semibold">
             Backend status
           </h2>
-          <span data-testid="status-badge" className={`rounded-full px-3 py-1 text-xs font-semibold ${tone}`}>
+          <span
+            data-testid="status-badge"
+            className={`rounded-full px-3 py-1 text-xs font-semibold ${tone}`}
+          >
             {label}
           </span>
         </div>
@@ -57,7 +60,10 @@ export default function StatusPage() {
 
         {phase === "degraded" && (
           <div className="mt-4">
-            <Notice tone="warning" title="The API is running but a dependency is failing">
+            <Notice
+              tone="warning"
+              title="The API is running but a dependency is failing"
+            >
               Database check reported “{data?.database}”.
             </Notice>
           </div>
