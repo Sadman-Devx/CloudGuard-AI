@@ -129,7 +129,7 @@ describe("CopilotPanel", () => {
       await screen.findByText("Offline demo provider — not a Meta model"),
     ).toBeInTheDocument();
     expect(
-      screen.getByText(/No Meta API key is configured/),
+      screen.getByText(/The Meta model provider is not active/),
     ).toBeInTheDocument();
     expect(screen.queryByText(/Meta model ·/)).not.toBeInTheDocument();
   });

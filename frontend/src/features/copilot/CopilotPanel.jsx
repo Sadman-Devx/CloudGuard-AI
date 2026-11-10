@@ -139,9 +139,9 @@ export default function CopilotPanel({ finding }) {
       </div>
       {demo && (
         <p className="text-xs text-slate-500">
-          No Meta API key is configured, so answers come from the offline demo
-          provider. Set META_API_KEY and META_MODEL_ID on the backend to use a
-          Meta model.
+          The Meta model provider is not active, so answers come from the
+          offline demo provider. Set META_API_KEY and META_MODEL_ID on the
+          backend to use a Meta model.
         </p>
       )}
       {error && (

@@ -127,8 +127,8 @@ export default function SimulationPanel({ snapshotId, interactionId }) {
           {result.warnings?.length > 0 && (
             <Notice tone="warning" title="Warnings">
               <ul className="list-disc pl-5">
-                {result.warnings.map((w) => (
-                  <li key={w}>{w}</li>
+                {result.warnings.map((warning) => (
+                  <li key={warning.code}>{warning.message}</li>
                 ))}
               </ul>
             </Notice>
