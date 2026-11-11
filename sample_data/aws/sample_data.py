@@ -1,0 +1,34 @@
+"""Demo environment. Replace with real inventory (AWS Config / Azure Resource Graph / GCP CAI)."""
+
+SAMPLE_GRAPH = {
+    "nodes": [
+        {"id": "internet", "name": "Internet", "type": "internet", "criticality": 1, "internet_exposed": True},
+        {"id": "alb", "name": "Public ALB", "type": "load_balancer", "criticality": 3, "internet_exposed": True},
+        {"id": "web1", "name": "web-server-1", "type": "ec2", "criticality": 4,
+         "vulns": [{"id": "CVE-2024-3094", "cvss": 9.8}]},
+        {"id": "app1", "name": "app-server-1", "type": "ec2", "criticality": 5,
+         "vulns": [{"id": "CVE-2023-4863", "cvss": 6.5}]},
+        {"id": "jenkins", "name": "jenkins-ci", "type": "ec2", "criticality": 6, "internet_exposed": True,
+         "vulns": [{"id": "CVE-2024-23897", "cvss": 9.8}]},
+        {"id": "role_web", "name": "IAM: web-instance-role", "type": "iam_role", "criticality": 6},
+        {"id": "role_admin", "name": "IAM: deploy-admin-role", "type": "iam_role", "criticality": 9},
+        {"id": "lambda_etl", "name": "lambda-etl", "type": "lambda", "criticality": 4},
+        {"id": "rds", "name": "RDS customers-db", "type": "rds", "criticality": 10, "crown_jewel": True},
+        {"id": "s3_backup", "name": "S3 prod-backups", "type": "s3", "criticality": 9, "crown_jewel": True},
+        {"id": "s3_lake", "name": "S3 data-lake", "type": "s3", "criticality": 7, "crown_jewel": True},
+    ],
+    "edges": [
+        {"source": "internet", "target": "alb", "kind": "network", "exploitability": 0.9, "label": "HTTPS 443"},
+        {"source": "internet", "target": "jenkins", "kind": "network", "exploitability": 0.8, "label": "Port 8080 open"},
+        {"source": "alb", "target": "web1", "kind": "network", "exploitability": 0.8, "label": "Forward to targets"},
+        {"source": "web1", "target": "app1", "kind": "network", "exploitability": 0.7, "label": "SG allows 8443"},
+        {"source": "web1", "target": "role_web", "kind": "iam_assume", "exploitability": 0.9, "label": "IMDS credentials"},
+        {"source": "app1", "target": "rds", "kind": "data_access", "exploitability": 0.7, "label": "DB creds in env"},
+        {"source": "role_web", "target": "s3_backup", "kind": "data_access", "exploitability": 0.5, "label": "s3:* on backups"},
+        {"source": "role_web", "target": "lambda_etl", "kind": "iam_assume", "exploitability": 0.4, "label": "lambda:InvokeFunction"},
+        {"source": "lambda_etl", "target": "s3_lake", "kind": "data_access", "exploitability": 0.8, "label": "Execution role"},
+        {"source": "jenkins", "target": "role_admin", "kind": "iam_assume", "exploitability": 0.7, "label": "Stored deploy keys"},
+        {"source": "role_admin", "target": "rds", "kind": "data_access", "exploitability": 0.8, "label": "AdministratorAccess"},
+        {"source": "role_admin", "target": "s3_backup", "kind": "data_access", "exploitability": 0.9, "label": "AdministratorAccess"},
+    ],
+}

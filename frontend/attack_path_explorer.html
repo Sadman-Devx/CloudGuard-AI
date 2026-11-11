@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Attack Path & Blast Radius Explorer</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root { --bg:#fff; --panel:#f6f7f9; --text:#1c2330; --muted:#667085; --border:#d9dde4; --danger:#d92d20; --warn:#f79009; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#10141c; --panel:#171c27; --text:#e6e9ef; --muted:#98a2b3; --border:#2b3344; } }
+  * { box-sizing: border-box; }
+  body { margin:0; font:14px/1.45 system-ui,sans-serif; background:var(--bg); color:var(--text); display:flex; height:100vh; }
+  #graph { flex:1; min-width:0; }
+  aside { width:380px; background:var(--panel); border-left:1px solid var(--border); overflow-y:auto; padding:14px; }
+  h2 { font-size:15px; margin:16px 0 8px; } h2:first-child { margin-top:0; }
+  .card { border:1px solid var(--border); border-radius:8px; padding:8px 10px; margin-bottom:8px; cursor:pointer; background:var(--bg); }
+  .card:hover { border-color:var(--danger); }
+  .muted { color:var(--muted); font-size:12px; }
+  .badge { display:inline-block; padding:1px 8px; border-radius:10px; font-size:11px; color:#fff; }
+  .critical{background:#d92d20}.high{background:#f79009}.medium{background:#eab308}.low{background:#12b76a}
+  button { font:inherit; padding:4px 10px; border-radius:6px; border:1px solid var(--border); background:var(--bg); color:var(--text); cursor:pointer; }
+  svg text { fill: var(--text); font-size: 11px; pointer-events:none; }
+  .link { stroke:var(--muted); stroke-opacity:.35; fill:none; }
+  .link.hot { stroke:var(--danger); stroke-opacity:1; stroke-width:2.5px; }
+  .node.dim { opacity:.2; }
+</style>
+</head>
+<body>
+<svg id="graph"></svg>
+<aside>
+  <h2>Top attack paths</h2><div id="paths" class="muted">Loading…</div>
+  <h2>Choke points <span class="muted">(fix these first)</span></h2><div id="chokes"></div>
+  <h2>Blast radius</h2><div id="blast" class="muted">Click a node to compute its blast radius.</div>
+  <h2>Fix simulation</h2><div id="sim" class="muted">Press "Simulate fix" on a choke point.</div>
+</aside>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
+<script>
+const API = "/api/attack-path";   // change if the backend is on another origin
+const COLORS = { internet:"#667085", load_balancer:"#2e90fa", ec2:"#7a5af8", iam_role:"#f79009",
+                 s3:"#12b76a", rds:"#d92d20", lambda:"#ee46bc" };
+const el = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const pct = x => (x*100).toFixed(1) + "%";
+const api = async (path, opts) => { const r = await fetch(API+path, opts); if(!r.ok) throw new Error(await r.text()); return r.json(); };
+
+let nodeSel, linkSel, simulation;
+
+function highlight(nodeIds, edgePairs) {
+  const ns = new Set(nodeIds), es = new Set(edgePairs.map(e => e.source+">"+e.target));
+  nodeSel.classed("dim", d => !ns.has(d.id));
+  linkSel.classed("hot", d => es.has(d.source.id+">"+d.target.id));
+}
+const clearHighlight = () => { nodeSel.classed("dim", false); linkSel.classed("hot", false); };
+
+function drawGraph(data) {
+  const svg = d3.select("#graph"); svg.selectAll("*").remove();
+  const { width, height } = svg.node().getBoundingClientRect();
+  svg.append("defs").append("marker").attr("id","arrow").attr("viewBox","0 -5 10 10").attr("refX",24)
+     .attr("markerWidth",6).attr("markerHeight",6).attr("orient","auto")
+     .append("path").attr("d","M0,-5L10,0L0,5").attr("fill","#98a2b3");
+
+  const nodes = data.nodes.map(d => ({...d}));
+  const links = data.edges.map(d => ({...d}));
+  simulation = d3.forceSimulation(nodes)
+    .force("link", d3.forceLink(links).id(d => d.id).distance(110))
+    .force("charge", d3.forceManyBody().strength(-420))
+    .force("center", d3.forceCenter(width/2, height/2));
+
+  linkSel = svg.append("g").selectAll("line").data(links).join("line")
+    .attr("class","link").attr("marker-end","url(#arrow)");
+  nodeSel = svg.append("g").selectAll("g").data(nodes).join("g").attr("class","node")
+    .style("cursor","pointer").on("click", (_, d) => showBlast(d.id))
+    .call(d3.drag().on("start",(e,d)=>{ if(!e.active) simulation.alphaTarget(.3).restart(); d.fx=d.x; d.fy=d.y; })
+                   .on("drag",(e,d)=>{ d.fx=e.x; d.fy=e.y; })
+                   .on("end",(e,d)=>{ if(!e.active) simulation.alphaTarget(0); d.fx=null; d.fy=null; }));
+  nodeSel.append("circle").attr("r", d => 10 + d.criticality).attr("fill", d => COLORS[d.type] || "#667085")
+    .attr("stroke", d => d.crown_jewel ? "#facc15" : "#fff").attr("stroke-width", d => d.crown_jewel ? 4 : 1.5);
+  nodeSel.append("text").attr("dy", d => 24 + d.criticality).attr("text-anchor","middle").text(d => d.name);
+  nodeSel.append("title").text(d => `${d.name}\n${d.type}\ncriticality ${d.criticality}` +
+    (d.vulns.length ? "\n" + d.vulns.map(v => `${v.id} (CVSS ${v.cvss})`).join("\n") : ""));
+
+  simulation.on("tick", () => {
+    linkSel.attr("x1",d=>d.source.x).attr("y1",d=>d.source.y).attr("x2",d=>d.target.x).attr("y2",d=>d.target.y);
+    nodeSel.attr("transform", d => `translate(${d.x},${d.y})`);
+  });
+  svg.on("click", e => { if (e.target.tagName === "svg") clearHighlight(); });
+}
+
+async function loadPaths() {
+  const { paths, choke_points } = await api("/paths?top_k=8");
+  el("paths").innerHTML = paths.length ? "" : "No attack paths found 🎉";
+  paths.forEach((p, i) => {
+    const d = document.createElement("div"); d.className = "card";
+    d.innerHTML = `<b>#${i+1}</b> ${esc(p.nodes[0].name)} → <b>${esc(p.nodes.at(-1).name)}</b>
+      <div class="muted">${p.hops} hops · likelihood ${pct(p.probability)} · risk ${p.risk}</div>
+      <div class="muted">${p.nodes.map(n => esc(n.name)).join(" → ")}</div>`;
+    d.onclick = () => highlight(p.node_ids, p.edges);
+    el("paths").appendChild(d);
+  });
+  el("chokes").innerHTML = "";
+  choke_points.forEach(c => {
+    const d = document.createElement("div"); d.className = "card";
+    d.innerHTML = `<b>${esc(c.name)}</b> <span class="muted">(${esc(c.type)})</span>
+      <div class="muted">On ${c.paths} paths · ${pct(c.risk_share)} of total risk</div>
+      <button>Simulate fix</button>`;
+    d.querySelector("button").onclick = e => { e.stopPropagation(); simulateFix(c); };
+    el("chokes").appendChild(d);
+  });
+}
+
+async function showBlast(id) {
+  const r = await api(`/blast-radius/${encodeURIComponent(id)}`);
+  highlight([id, ...r.reachable.map(x => x.id)], r.edges);
+  el("blast").innerHTML = `
+    <div><b>${esc(r.start.name)}</b> <span class="badge ${r.severity}">${r.severity}</span></div>
+    <div class="muted">${r.reachable_count} assets reachable · impact score ${r.total_impact_score}
+      · ${r.crown_jewels_reached.length} crown jewel(s)</div>` +
+    r.reachable.map(x => `<div class="card" style="cursor:default"><b>${esc(x.name)}</b>
+      <span class="muted">${esc(x.type)} · ${x.hops} hop(s) · ${pct(x.probability)}</span></div>`).join("");
+}
+
+async function simulateFix(c) {
+  const r = await api("/simulate", { method:"POST", headers:{"Content-Type":"application/json"},
+                                     body: JSON.stringify({ remove_nodes:[c.id] }) });
+  el("sim").innerHTML = `<div class="card" style="cursor:default">Hardening <b>${esc(c.name)}</b>:<br>
+    paths ${r.paths_before} → <b>${r.paths_after}</b><br>
+    risk ${r.risk_before} → <b>${r.risk_after}</b>
+    <span class="badge low">-${r.risk_reduction_pct}%</span></div>`;
+}
+
+(async () => {
+  try { drawGraph(await api("/graph")); await loadPaths(); }
+  catch (e) { el("paths").textContent = "Failed to load: " + e.message; }
+})();
+</script>
+</body>
+</html>
