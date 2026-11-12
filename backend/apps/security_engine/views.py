@@ -8,16 +8,25 @@ from rest_framework.views import APIView
 from apps.cloud_resources.models import ConfigurationSnapshot
 from common.exceptions import ConfigValidationFailed
 from domain.network.rules import RULES, SEVERITIES
+from domain.network.scoring import compute_score
 
 from .models import SecurityFinding
 from .serializers import AnalysisSerializer, FindingSerializer
 from .services.analysis import SnapshotIncompatible, analyze_snapshot
 
 
+def _score(analysis):
+    """Score of the *whole* analysis (not of a filtered list), or None before the first run."""
+    if analysis is None:
+        return None
+    return compute_score((analysis.summary or {}).get("by_severity"))
+
+
 def _payload(snapshot, analysis, findings):
     return {
         "snapshot": snapshot.id,
         "analysis": AnalysisSerializer(analysis).data if analysis else None,
+        "score": _score(analysis),
         "results": FindingSerializer(findings, many=True).data,
     }
 

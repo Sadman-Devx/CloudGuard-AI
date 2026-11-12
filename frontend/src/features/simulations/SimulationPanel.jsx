@@ -2,6 +2,7 @@ import { useState } from "react";
 
 import { runSimulation } from "../../api/endpoints.js";
 import Notice from "../../components/Notice.jsx";
+import TwinSlider from "../score/TwinSlider.jsx";
 
 const OUTCOMES = {
   improves_security: {
@@ -133,6 +134,7 @@ export default function SimulationPanel({ snapshotId, interactionId }) {
               </ul>
             </Notice>
           )}
+          <TwinSlider score={data.score} findings={result.findings} />
           <p className="text-sm text-slate-700">
             Findings: {result.findings.before_summary.total} before →{" "}
             {result.findings.after_summary.total} after

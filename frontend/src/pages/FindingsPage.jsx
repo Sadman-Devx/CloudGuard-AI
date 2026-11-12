@@ -6,6 +6,7 @@ import FindingDetail from "../features/findings/FindingDetail.jsx";
 import FindingsTable from "../features/findings/FindingsTable.jsx";
 import { SEVERITIES } from "../features/findings/severity.js";
 import SeverityBadge from "../features/findings/SeverityBadge.jsx";
+import ScoreGauge from "../features/score/ScoreGauge.jsx";
 import { useAsyncData } from "../hooks/useAsyncData.js";
 import { useSnapshotSelection } from "../hooks/useSnapshotSelection.js";
 
@@ -184,6 +185,21 @@ export default function FindingsPage({ focus = null }) {
 
       {data?.analysis && (
         <>
+          {data.score && (
+            <div className="flex flex-wrap items-center gap-4 rounded-lg border border-slate-200 bg-white px-4 py-3">
+              <ScoreGauge value={data.score.value} grade={data.score.grade} max={data.score.max} />
+              <div className="text-sm text-slate-700">
+                <p className="font-semibold text-slate-900">Security score</p>
+                <p>
+                  100 minus {data.score.penalty} point(s) of penalty from the findings below.
+                </p>
+                <p className="text-xs text-slate-500">
+                  Only rules SG-001 to SG-006 are counted. A score of 100 does not prove the
+                  network is secure.
+                </p>
+              </div>
+            </div>
+          )}
           <dl
             aria-label="Findings by severity"
             className="grid grid-cols-5 gap-2"

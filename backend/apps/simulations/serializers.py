@@ -1,5 +1,6 @@
 from rest_framework import serializers
 
+from domain.network.scoring import compare_scores
 from domain.network.simulation import MAX_REQUIRED_PATHS
 
 from .models import Simulation
@@ -39,6 +40,7 @@ class SimulationSerializer(serializers.ModelSerializer):
     before = serializers.JSONField(source="before_json", read_only=True)
     after = serializers.JSONField(source="after_json", read_only=True)
     applied_to_cloud = serializers.SerializerMethodField()
+    score = serializers.SerializerMethodField()
 
     class Meta:
         model = Simulation
@@ -55,6 +57,7 @@ class SimulationSerializer(serializers.ModelSerializer):
             "proposed_change",
             "required_paths",
             "result",
+            "score",
             "before",
             "after",
             "created_at",
@@ -63,6 +66,19 @@ class SimulationSerializer(serializers.ModelSerializer):
 
     def get_applied_to_cloud(self, obj) -> bool:
         return False  # the MVP never modifies real infrastructure
+
+    def get_score(self, obj) -> dict | None:
+        """Security score before and after the change, derived from the stored findings summaries.
+
+        Computed on read from ``result_json`` (not stored), so older simulations get a score too and
+        there is no migration.
+        """
+        findings = (obj.result_json or {}).get("findings") or {}
+        before = (findings.get("before_summary") or {}).get("by_severity")
+        after = (findings.get("after_summary") or {}).get("by_severity")
+        if before is None or after is None:
+            return None
+        return compare_scores(before, after)
 
 
 class SimulationListSerializer(SimulationSerializer):

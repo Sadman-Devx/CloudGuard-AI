@@ -27,7 +27,7 @@ def import_fixture(client, project, name):
 def test_findings_before_analysis_is_null_not_empty_success(client, project):
     sid = import_fixture(client, project, "exposed_database")
     body = client.get(f"/api/snapshots/{sid}/findings/").json()
-    assert body == {"snapshot": sid, "analysis": None, "results": []}
+    assert body == {"snapshot": sid, "analysis": None, "score": None, "results": []}
 
 
 def test_analyze_exposed_database_persists_findings(client, project):
