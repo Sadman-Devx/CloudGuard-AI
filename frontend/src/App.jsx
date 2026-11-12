@@ -51,6 +51,12 @@ export default function App() {
               {label}
             </button>
           ))}
+          <a
+            href="/attack_path_explorer.html"
+            className="border-b-2 border-transparent px-3 py-2 text-sm font-medium text-slate-500 hover:text-slate-800"
+          >
+            Attack path explorer
+          </a>
         </nav>
       </header>
       <main

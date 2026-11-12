@@ -6,12 +6,13 @@ data access, credential reuse ...).
 
 Edge probability = exploitability * vulnerability factor of the target node.
 """
+
 from __future__ import annotations
 
 import heapq
 from collections import defaultdict
+from collections.abc import Iterable
 from dataclasses import asdict, dataclass, field
-from typing import Iterable
 
 
 @dataclass
@@ -51,7 +52,7 @@ class AttackGraph:
         self.adj[edge.source].append(edge)
 
     @classmethod
-    def from_dict(cls, data: dict) -> "AttackGraph":
+    def from_dict(cls, data: dict) -> AttackGraph:
         g = cls()
         for n in data.get("nodes", []):
             g.add_node(Node(**n))
@@ -65,7 +66,7 @@ class AttackGraph:
             "edges": [asdict(e) for es in self.adj.values() for e in es],
         }
 
-    def without(self, node_ids: Iterable[str]) -> "AttackGraph":
+    def without(self, node_ids: Iterable[str]) -> AttackGraph:
         """Copy of the graph with nodes removed (used for fix simulation)."""
         drop = set(node_ids)
         g = AttackGraph()
@@ -88,12 +89,23 @@ class AttackGraph:
 
     def _node_brief(self, nid: str) -> dict:
         n = self.nodes[nid]
-        return {"id": n.id, "name": n.name, "type": n.type, "criticality": n.criticality,
-                "crown_jewel": n.crown_jewel}
+        return {
+            "id": n.id,
+            "name": n.name,
+            "type": n.type,
+            "criticality": n.criticality,
+            "crown_jewel": n.crown_jewel,
+        }
 
     # ---------- attack paths ----------
-    def attack_paths(self, sources: list[str] | None = None, targets: list[str] | None = None,
-                     max_depth: int = 6, top_k: int = 10, min_prob: float = 0.001) -> list[dict]:
+    def attack_paths(
+        self,
+        sources: list[str] | None = None,
+        targets: list[str] | None = None,
+        max_depth: int = 6,
+        top_k: int = 10,
+        min_prob: float = 0.001,
+    ) -> list[dict]:
         sources = sources or self.entry_points()
         target_set = set(targets or [n.id for n in self.nodes.values() if n.crown_jewel])
         results: list[dict] = []
@@ -101,17 +113,26 @@ class AttackGraph:
         def dfs(node: str, path: list[str], edges: list[Edge], prob: float) -> None:
             if node in target_set and edges:
                 impact = self.nodes[node].criticality
-                results.append({
-                    "node_ids": path,
-                    "nodes": [self._node_brief(x) for x in path],
-                    "edges": [{"source": e.source, "target": e.target, "kind": e.kind,
-                               "label": e.label, "probability": round(self._edge_prob(e), 3)}
-                              for e in edges],
-                    "probability": round(prob, 4),
-                    "impact": impact,
-                    "risk": round(prob * impact, 4),
-                    "hops": len(edges),
-                })
+                results.append(
+                    {
+                        "node_ids": path,
+                        "nodes": [self._node_brief(x) for x in path],
+                        "edges": [
+                            {
+                                "source": e.source,
+                                "target": e.target,
+                                "kind": e.kind,
+                                "label": e.label,
+                                "probability": round(self._edge_prob(e), 3),
+                            }
+                            for e in edges
+                        ],
+                        "probability": round(prob, 4),
+                        "impact": impact,
+                        "risk": round(prob * impact, 4),
+                        "hops": len(edges),
+                    }
+                )
                 return  # stop at first crown jewel on this branch
             if len(edges) >= max_depth:
                 return
@@ -158,8 +179,12 @@ class AttackGraph:
             if nid == start:
                 continue
             n = self.nodes[nid]
-            item = {**self._node_brief(nid), "probability": round(p, 4), "hops": d,
-                    "impact_score": round(p * n.criticality, 3)}
+            item = {
+                **self._node_brief(nid),
+                "probability": round(p, 4),
+                "hops": d,
+                "impact_score": round(p * n.criticality, 3),
+            }
             reachable.append(item)
             by_type[n.type] += 1
             score += p * n.criticality
@@ -194,13 +219,21 @@ class AttackGraph:
         agg: dict[str, dict] = defaultdict(lambda: {"paths": 0, "risk": 0.0})
         total = sum(p["risk"] for p in paths) or 1.0
         for p in paths:
-            for nid, brief in zip(p["node_ids"][1:-1], p["nodes"][1:-1]):
+            for nid, brief in zip(p["node_ids"][1:-1], p["nodes"][1:-1], strict=False):
                 a = agg[nid]
                 a["paths"] += 1
                 a["risk"] += p["risk"]
                 a["name"], a["type"] = brief["name"], brief["type"]
-        out = [{"id": k, "name": v["name"], "type": v["type"], "paths": v["paths"],
-                "risk_share": round(v["risk"] / total, 3)} for k, v in agg.items()]
+        out = [
+            {
+                "id": k,
+                "name": v["name"],
+                "type": v["type"],
+                "paths": v["paths"],
+                "risk_share": round(v["risk"] / total, 3),
+            }
+            for k, v in agg.items()
+        ]
         out.sort(key=lambda x: (x["risk_share"], x["paths"]), reverse=True)
         return out[:top_n]
 
@@ -210,7 +243,9 @@ class AttackGraph:
         rb, ra = sum(p["risk"] for p in before), sum(p["risk"] for p in after)
         return {
             "removed": remove_nodes,
-            "paths_before": len(before), "paths_after": len(after),
-            "risk_before": round(rb, 3), "risk_after": round(ra, 3),
+            "paths_before": len(before),
+            "paths_after": len(after),
+            "risk_before": round(rb, 3),
+            "risk_after": round(ra, 3),
             "risk_reduction_pct": round((1 - ra / rb) * 100, 1) if rb else 0.0,
         }

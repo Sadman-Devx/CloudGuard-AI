@@ -157,6 +157,9 @@ describe("FindingsPage", () => {
     expect(notice.parentElement).toHaveTextContent(
       "does not prove the network is secure",
     );
+    expect(notice.parentElement).toHaveTextContent(
+      "no proposed fix to simulate",
+    );
   });
 
   it("shows an error when the analysis fails", async () => {

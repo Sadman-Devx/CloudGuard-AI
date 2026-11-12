@@ -103,12 +103,14 @@ export default function CopilotPanel({ finding }) {
   );
   const [generated, setGenerated] = useState(null); // { result } | { error }
   const [busy, setBusy] = useState(false);
+  const [showAnswer, setShowAnswer] = useState(true);
 
   const result = generated?.result ?? stored.data;
   const error = generated?.error ?? stored.error;
 
   const run = async (refresh) => {
     setBusy(true);
+    setShowAnswer(true);
     setGenerated(null);
     try {
       setGenerated({ result: await explainFinding(finding.id, { refresh }) });
@@ -154,12 +156,27 @@ export default function CopilotPanel({ finding }) {
           Waiting for the model…
         </p>
       )}
-      {result && !busy && <Result result={result} saved={!generated?.result} />}
-      {result && !busy && result.proposed_change && finding.snapshot && (
+      {result && !busy && (
+        <div className="space-y-2">
+          <button
+            type="button"
+            aria-expanded={showAnswer}
+            onClick={() => setShowAnswer((visible) => !visible)}
+            className="text-xs font-medium text-indigo-700 hover:text-indigo-900"
+          >
+            {showAnswer ? "Hide AI explanation" : "Show AI explanation"}
+          </button>
+          {showAnswer && (
+            <Result result={result} saved={!generated?.result} />
+          )}
+        </div>
+      )}
+      {result && !busy && finding.snapshot && (
         <SimulationPanel
           key={result.id}
           snapshotId={finding.snapshot}
-          interactionId={result.id}
+          interactionId={result.proposed_change ? result.id : undefined}
+          finding={result.proposed_change ? undefined : finding}
         />
       )}
     </section>

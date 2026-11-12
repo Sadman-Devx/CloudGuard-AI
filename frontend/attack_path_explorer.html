@@ -27,6 +27,7 @@
 <body>
 <svg id="graph"></svg>
 <aside>
+  <p class="muted">Synthetic demo graph, separate from your imported snapshots. No cloud account is queried or changed.</p>
   <h2>Top attack paths</h2><div id="paths" class="muted">Loading…</div>
   <h2>Choke points <span class="muted">(fix these first)</span></h2><div id="chokes"></div>
   <h2>Blast radius</h2><div id="blast" class="muted">Click a node to compute its blast radius.</div>
@@ -35,7 +36,7 @@
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
 <script>
-const API = "/api/attack-path";   // change if the backend is on another origin
+const API = "/api/attack-path/";
 const COLORS = { internet:"#667085", load_balancer:"#2e90fa", ec2:"#7a5af8", iam_role:"#f79009",
                  s3:"#12b76a", rds:"#d92d20", lambda:"#ee46bc" };
 const el = id => document.getElementById(id);
@@ -87,7 +88,7 @@ function drawGraph(data) {
 }
 
 async function loadPaths() {
-  const { paths, choke_points } = await api("/paths?top_k=8");
+  const { paths, choke_points } = await api("paths/?top_k=8");
   el("paths").innerHTML = paths.length ? "" : "No attack paths found 🎉";
   paths.forEach((p, i) => {
     const d = document.createElement("div"); d.className = "card";
@@ -109,7 +110,7 @@ async function loadPaths() {
 }
 
 async function showBlast(id) {
-  const r = await api(`/blast-radius/${encodeURIComponent(id)}`);
+  const r = await api(`blast-radius/${encodeURIComponent(id)}/`);
   highlight([id, ...r.reachable.map(x => x.id)], r.edges);
   el("blast").innerHTML = `
     <div><b>${esc(r.start.name)}</b> <span class="badge ${r.severity}">${r.severity}</span></div>
@@ -120,7 +121,7 @@ async function showBlast(id) {
 }
 
 async function simulateFix(c) {
-  const r = await api("/simulate", { method:"POST", headers:{"Content-Type":"application/json"},
+  const r = await api("simulate/", { method:"POST", headers:{"Content-Type":"application/json"},
                                      body: JSON.stringify({ remove_nodes:[c.id] }) });
   el("sim").innerHTML = `<div class="card" style="cursor:default">Hardening <b>${esc(c.name)}</b>:<br>
     paths ${r.paths_before} → <b>${r.paths_after}</b><br>
@@ -129,7 +130,7 @@ async function simulateFix(c) {
 }
 
 (async () => {
-  try { drawGraph(await api("/graph")); await loadPaths(); }
+  try { drawGraph(await api("graph/")); await loadPaths(); }
   catch (e) { el("paths").textContent = "Failed to load: " + e.message; }
 })();
 </script>

@@ -15,6 +15,7 @@ urlpatterns = [
     path("api/", include("apps.security_engine.urls")),
     path("api/", include("apps.ai_copilot.urls")),
     path("api/", include("apps.simulations.urls")),
+    path("api/attack-path/", include("apps.attack_paths.urls")),
     path("api/schema/", SpectacularAPIView.as_view(), name="schema"),
     path("api/docs/", SpectacularSwaggerView.as_view(url_name="schema"), name="docs"),
 ]

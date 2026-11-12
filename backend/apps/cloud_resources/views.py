@@ -7,13 +7,13 @@ from rest_framework.views import APIView
 
 from apps.projects.models import Project
 from common.exceptions import ConfigValidationFailed
+from common.sanitize import strip_control_chars
 
 from .models import CloudResource, ConfigurationSnapshot
 from .serializers import CloudResourceSerializer, FixtureImportSerializer, SnapshotSerializer
 from .services.fixtures import FixtureNotFound, list_fixtures, load_fixture
 from .services.snapshots import import_snapshot
 from .services.topology import SnapshotIncompatible, snapshot_topology
-from common.sanitize import strip_control_chars
 
 
 class ProjectSnapshotsView(generics.ListAPIView):

@@ -83,6 +83,58 @@ describe("CopilotPanel", () => {
     expect(calls.some((c) => c.method === "POST")).toBe(false);
   });
 
+  it("offers a manual simulation when the answer has no safe automatic proposal", async () => {
+    mockFetch(
+      routes({
+        "GET /api/findings/11/explain/": () => ({
+          body: {
+            interaction: {
+              ...INTERACTION,
+              proposed_change: null,
+              explanation: "A human must decide the legitimate SSH source.",
+            },
+          },
+        }),
+      }),
+    );
+    render(
+      <CopilotPanel
+        finding={{
+          id: 11,
+          snapshot: 8,
+          resource_id: "sg-web",
+          evidence: {
+            matching_rules: [
+              {
+                direction: "ingress",
+                index: 0,
+                protocol: "tcp",
+                from_port: 22,
+                to_port: 22,
+                cidr: "0.0.0.0/0",
+              },
+            ],
+          },
+        }}
+      />,
+    );
+
+    expect(
+      await screen.findByRole("heading", {
+        name: "Manual digital twin simulation",
+      }),
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText("Trusted IPv4 CIDR")).toBeInTheDocument();
+
+    await userEvent.click(
+      screen.getByRole("button", { name: "Hide AI explanation" }),
+    );
+    expect(
+      screen.queryByText("A human must decide the legitimate SSH source."),
+    ).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Trusted IPv4 CIDR")).toBeInTheDocument();
+  });
+
   it("asking again sends refresh=true", async () => {
     const { calls } = mockFetch(
       routes({

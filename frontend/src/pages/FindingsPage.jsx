@@ -226,7 +226,10 @@ export default function FindingsPage({ focus = null }) {
             >
               This does not prove the network is secure: only these six
               security-group checks were run, and routes, NACLs and reachability
-              are not evaluated here.
+              are not evaluated here. This snapshot has no proposed fix to
+              simulate, so the Before/After slider is unavailable. Import the
+              exposed_database sample, select a finding, ask the copilot for a
+              fix, then simulate it to see the slider.
             </Notice>
           ) : (
             <>
@@ -268,8 +271,8 @@ export default function FindingsPage({ focus = null }) {
                   />
                 ) : (
                   <p className="rounded-lg border border-dashed border-slate-300 p-6 text-sm text-slate-500">
-                    Select a finding to see its evidence and ask the AI copilot
-                    to explain it.
+                    Select a finding, ask the AI copilot for a proposed fix,
+                    then simulate it to see the Before/After score slider.
                   </p>
                 )}
               </div>

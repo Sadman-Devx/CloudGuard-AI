@@ -35,6 +35,10 @@ Every response carries `X-Request-ID` (a well-formed client-supplied ID is echoe
 | POST | `/api/projects/{id}/snapshots/from-fixture/` | `{"fixture": "exposed_database"}` → `201` |
 | GET | `/api/snapshots/{id}/` | Snapshot metadata |
 | GET | `/api/snapshots/{id}/resources/` | Normalized inventory; filter `?type=security_group` |
+| GET | `/api/attack-path/graph/` | Read-only demo attack-path graph |
+| GET | `/api/attack-path/paths/?top_k=8&max_depth=6` | Ranked demo attack paths and choke points |
+| GET | `/api/attack-path/blast-radius/{node_id}/?max_depth=4` | Demo graph blast radius for a node |
+| POST | `/api/attack-path/simulate/` | Demo graph what-if; body `{"remove_nodes":["role_admin"],"max_depth":6}` |
 
 | POST | `/api/snapshots/{id}/reachability/` | One question: `{source, destination, protocol, port, source_ip?}` → verdict, reason codes, full trace |
 | POST | `/api/snapshots/{id}/simulations/` | Run a what-if. Body: exactly one of `proposed_change` / `interaction_id`, plus optional `finding_id`, `required_paths[]` (≤ 20). `201` |
@@ -47,6 +51,9 @@ re-validated server-side even when it comes from a stored AI explanation. Reques
 with `details` keyed by field (`proposed_change`, `required_paths`, `interaction_id`, `finding_id`).
 
 Topology, analysis and copilot endpoints: see `/api/docs/`.
+
+The attack-path explorer uses a bundled synthetic demo graph; it is not derived
+from imported snapshots and does not query or modify a cloud account.
 
 ## Example
 

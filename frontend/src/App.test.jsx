@@ -23,6 +23,9 @@ describe("App navigation", () => {
     expect(nav).toHaveTextContent("Import");
     expect(nav).toHaveTextContent("Topology");
     expect(nav).toHaveTextContent("Findings");
+    expect(
+      screen.getByRole("link", { name: "Attack path explorer" }),
+    ).toHaveAttribute("href", "/attack_path_explorer.html");
     expect(screen.getByRole("button", { name: "Status" })).toHaveAttribute(
       "aria-current",
       "page",

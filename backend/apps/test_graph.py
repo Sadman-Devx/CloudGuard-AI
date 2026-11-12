@@ -1,7 +1,7 @@
 import pytest
 
-from attack_path.graph import AttackGraph
-from attack_path.sample_data import SAMPLE_GRAPH
+from apps.attack_paths.demo_graph import SAMPLE_GRAPH
+from graph import AttackGraph
 
 
 @pytest.fixture

@@ -1,11 +1,12 @@
 """FastAPI router. Mount with:  app.include_router(attack_path_router)"""
+
 from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 
+from .apps.attack_paths.demo_graph import SAMPLE_GRAPH
 from .graph import AttackGraph
-from .sample_data import SAMPLE_GRAPH
 
 router = APIRouter(prefix="/api/attack-path", tags=["attack-path"])
 
@@ -52,7 +53,7 @@ def replace_graph(payload: GraphIn):
     try:
         _graph = AttackGraph.from_dict(payload.model_dump())
     except ValueError as exc:
-        raise HTTPException(status_code=422, detail=str(exc))
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     return {"nodes": len(_graph.nodes), "status": "updated"}
 
 
@@ -63,12 +64,13 @@ def get_paths(top_k: int = Query(10, ge=1, le=100), max_depth: int = Query(6, ge
 
 
 @router.get("/blast-radius/{node_id}")
-def get_blast_radius(node_id: str, max_depth: int = Query(4, ge=1, le=10),
-                     min_prob: float = Query(0.01, ge=0.0001, le=1)):
+def get_blast_radius(
+    node_id: str, max_depth: int = Query(4, ge=1, le=10), min_prob: float = Query(0.01, ge=0.0001, le=1)
+):
     try:
         return _graph.blast_radius(node_id, max_depth, min_prob)
-    except KeyError:
-        raise HTTPException(status_code=404, detail=f"Node '{node_id}' not found")
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=f"Node '{node_id}' not found") from exc
 
 
 @router.post("/simulate")
