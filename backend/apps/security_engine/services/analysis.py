@@ -30,7 +30,9 @@ def analyze_snapshot(snapshot: ConfigurationSnapshot) -> AnalysisRun:
         AnalysisRun.objects.filter(snapshot=snapshot).delete()
         SecurityFinding.objects.filter(snapshot=snapshot).delete()
         run = AnalysisRun.objects.create(
-            snapshot=snapshot, rules_version=RULES_VERSION, summary=summarize(findings, len(config.security_groups))
+            snapshot=snapshot,
+            rules_version=RULES_VERSION,
+            summary=summarize(findings, len(config.security_groups)),
         )
         SecurityFinding.objects.bulk_create(
             SecurityFinding(snapshot=snapshot, **finding.as_dict()) for finding in findings

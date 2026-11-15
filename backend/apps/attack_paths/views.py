@@ -71,7 +71,9 @@ class SnapshotSimulationSerializer(serializers.Serializer):
         if not given:
             raise serializers.ValidationError("Provide proposed_change, remove_nodes or remove_edges.")
         if "proposed_change" in given and len(given) > 1:
-            raise serializers.ValidationError("proposed_change cannot be combined with remove_nodes/remove_edges.")
+            raise serializers.ValidationError(
+                "proposed_change cannot be combined with remove_nodes/remove_edges."
+            )
         return attrs
 
 

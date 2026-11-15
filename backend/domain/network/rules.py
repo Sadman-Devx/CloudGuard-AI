@@ -428,9 +428,7 @@ def _world_matches(
     exclude: set[int] | frozenset[int] = frozenset(),
 ) -> list[dict[str, Any]]:
     return [
-        _rule_evidence(direction, i, rules[i])
-        for i in world_rule_indexes(rules, covers)
-        if i not in exclude
+        _rule_evidence(direction, i, rules[i]) for i in world_rule_indexes(rules, covers) if i not in exclude
     ]
 
 
@@ -454,9 +452,7 @@ def _evaluate_group(sg: SecurityGroup, context: dict[str, Any]) -> list[Finding]
 
     broad_indexes = {m["index"] for m in all_ports}
     for rule_id, (port, service) in SENSITIVE_PORTS.items():
-        matches = _world_matches(
-            "ingress", sg.ingress, lambda r, p=port: _covers_port(r, p), broad_indexes
-        )
+        matches = _world_matches("ingress", sg.ingress, lambda r, p=port: _covers_port(r, p), broad_indexes)
         if not matches:
             continue
         findings.append(

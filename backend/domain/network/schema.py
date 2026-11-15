@@ -455,7 +455,9 @@ class _Validator:
             subnet_ids={v.id for _, v in subnets},
             security_group_ids={v.id for _, v in sgs},
             vpc_ids={v.id for _, v in vpcs},
-            taken_ids={v.id for group in (vpcs, subnets, igws, route_tables, sgs, nacls, instances) for _, v in group},
+            taken_ids={
+                v.id for group in (vpcs, subnets, igws, route_tables, sgs, nacls, instances) for _, v in group
+            },
         )
         for path, code, message in issues:
             self.c.error(path, code, message)
@@ -507,7 +509,9 @@ class _Validator:
         self._check_nacls(nacls)
         self._check_instances(instances)
         if "extensions" in root:
-            self._check_extensions(root["extensions"], vpcs, subnets, igws, route_tables, sgs, nacls, instances)
+            self._check_extensions(
+                root["extensions"], vpcs, subnets, igws, route_tables, sgs, nacls, instances
+            )
         self._warn_unused(route_tables, sgs, subnets, instances)
 
         if self.c.errors:

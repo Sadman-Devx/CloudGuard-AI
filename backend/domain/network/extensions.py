@@ -220,7 +220,9 @@ class _Parser:
         value = obj[key]
         field = f"{path}.{key}"
         if not isinstance(value, list) or len(value) > MAX_ITEMS or (required and not value):
-            self.err(field, "invalid_list", f"Expected a {'non-empty ' if required else ''}list of {label} ids.")
+            self.err(
+                field, "invalid_list", f"Expected a {'non-empty ' if required else ''}list of {label} ids."
+            )
             return ()
         out = [self.ref(v, f"{field}[{i}]", known, label) for i, v in enumerate(value)]
         return tuple(dict.fromkeys(v for v in out if v))
@@ -289,7 +291,9 @@ class _Parser:
                 self.err(f"{path}.scheme", "invalid_value", f"scheme must be one of {', '.join(LB_SCHEMES)}.")
                 scheme = None
             subnets = self.ref_list(o, "subnet_ids", path, self.subnet_ids, "subnet", required=True)
-            groups = self.ref_list(o, "security_group_ids", path, self.sg_ids, "security group", required=True)
+            groups = self.ref_list(
+                o, "security_group_ids", path, self.sg_ids, "security group", required=True
+            )
             targets = self.ref_list(o, "target_instance_ids", path, self.instance_ids, "instance")
             ports_raw = o.get("listener_ports")
             ports: list[int] = []
@@ -306,7 +310,16 @@ class _Parser:
             name = self.text(o, "name", path, ident or "")
             if ident and scheme and subnets and groups and ports:
                 out.append(
-                    LoadBalancer(ident, name, scheme, subnets, groups, tuple(dict.fromkeys(ports)), targets, target_port)
+                    LoadBalancer(
+                        ident,
+                        name,
+                        scheme,
+                        subnets,
+                        groups,
+                        tuple(dict.fromkeys(ports)),
+                        targets,
+                        target_port,
+                    )
                 )
         return out
 
@@ -324,13 +337,19 @@ class _Parser:
             ident = self.ident(o, path)
             engine = o.get("engine")
             if engine not in ENGINE_PORTS:
-                self.err(f"{path}.engine", "invalid_value", f"engine must be one of {', '.join(sorted(ENGINE_PORTS))}.")
+                self.err(
+                    f"{path}.engine",
+                    "invalid_value",
+                    f"engine must be one of {', '.join(sorted(ENGINE_PORTS))}.",
+                )
                 engine = None
             port = ENGINE_PORTS.get(engine or "", 0)
             if o.get("port") is not None:
                 port = self.port(o["port"], f"{path}.port") or port
             subnets = self.ref_list(o, "subnet_ids", path, self.subnet_ids, "subnet", required=True)
-            groups = self.ref_list(o, "security_group_ids", path, self.sg_ids, "security group", required=True)
+            groups = self.ref_list(
+                o, "security_group_ids", path, self.sg_ids, "security group", required=True
+            )
             name = self.text(o, "name", path, ident or "")
             public = self.boolean(o, "publicly_accessible", path, False)
             sensitive = self.boolean(o, "sensitive", path, True)
@@ -379,15 +398,32 @@ class _Parser:
                         continue
                     access = po.get("access")
                     if access not in ACCESS_LEVELS:
-                        self.err(f"{p_path}.access", "invalid_value", f"access must be one of {', '.join(ACCESS_LEVELS)}.")
+                        self.err(
+                            f"{p_path}.access",
+                            "invalid_value",
+                            f"access must be one of {', '.join(ACCESS_LEVELS)}.",
+                        )
                         continue
                     ids = po.get("resource_ids")
-                    if not isinstance(ids, list) or not ids or len(ids) > MAX_ITEMS or not all(isinstance(x, str) for x in ids):
-                        self.err(f"{p_path}.resource_ids", "invalid_list", "Expected a non-empty list of resource ids or '*'.")
+                    if (
+                        not isinstance(ids, list)
+                        or not ids
+                        or len(ids) > MAX_ITEMS
+                        or not all(isinstance(x, str) for x in ids)
+                    ):
+                        self.err(
+                            f"{p_path}.resource_ids",
+                            "invalid_list",
+                            "Expected a non-empty list of resource ids or '*'.",
+                        )
                         continue
                     perms.append((p_path, access, ids))
             assume = o.get("can_assume", [])
-            if not isinstance(assume, list) or len(assume) > MAX_ITEMS or not all(isinstance(x, str) for x in assume):
+            if (
+                not isinstance(assume, list)
+                or len(assume) > MAX_ITEMS
+                or not all(isinstance(x, str) for x in assume)
+            ):
                 self.err(f"{path}.can_assume", "invalid_list", "Expected a list of role ids.")
                 assume = []
             if ident:
@@ -436,18 +472,29 @@ def parse_extensions(
             ok = True
             for i, rid in enumerate(ids):
                 if rid != ANY_RESOURCE and rid not in data_ids:
-                    parser.err(f"{p_path}.resource_ids[{i}]", "unknown_reference", "Unknown bucket or database.")
+                    parser.err(
+                        f"{p_path}.resource_ids[{i}]", "unknown_reference", "Unknown bucket or database."
+                    )
                     ok = False
             if ok:
                 permissions.append(Permission(access, tuple(dict.fromkeys(ids))))
         can_assume: list[str] = []
         for i, rid in enumerate(assume):
             if rid not in role_ids or rid == ident:
-                parser.err(f"{path}.can_assume[{i}]", "unknown_reference", "Unknown role (or the role itself).")
+                parser.err(
+                    f"{path}.can_assume[{i}]", "unknown_reference", "Unknown role (or the role itself)."
+                )
             else:
                 can_assume.append(rid)
         roles.append(
-            IamRole(base.id, base.name, base.instance_ids, tuple(permissions), tuple(dict.fromkeys(can_assume)), base.imds_v2_required)
+            IamRole(
+                base.id,
+                base.name,
+                base.instance_ids,
+                tuple(permissions),
+                tuple(dict.fromkeys(can_assume)),
+                base.imds_v2_required,
+            )
         )
 
     return (

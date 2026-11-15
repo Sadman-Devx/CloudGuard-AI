@@ -38,7 +38,9 @@ class Command(BaseCommand):
             json_mode=settings.META_JSON_MODE,
         )
         url = settings.META_API_BASE_URL.rstrip("/") + "/" + settings.META_CHAT_PATH.lstrip("/")
-        self.stdout.write(f"POST {url}  (model id: {settings.META_MODEL_ID}, json_mode={settings.META_JSON_MODE})")
+        self.stdout.write(
+            f"POST {url}  (model id: {settings.META_MODEL_ID}, json_mode={settings.META_JSON_MODE})"
+        )
 
         started = time.monotonic()
         try:

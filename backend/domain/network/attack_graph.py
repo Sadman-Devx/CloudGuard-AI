@@ -138,9 +138,7 @@ class AttackGraph:
             "edges": [asdict(e) for es in self.adj.values() for e in es],
         }
 
-    def without(
-        self, node_ids: Iterable[str] = (), edges: Iterable[tuple[str, str]] = ()
-    ) -> AttackGraph:
+    def without(self, node_ids: Iterable[str] = (), edges: Iterable[tuple[str, str]] = ()) -> AttackGraph:
         """Copy of the graph with nodes and/or (source, target) edges removed."""
         drop_nodes = set(node_ids)
         drop_edges = {(s, t) for s, t in edges}
@@ -424,7 +422,9 @@ class _EdgeBook:
     def __init__(self) -> None:
         self.edges: dict[tuple[str, str, str], Edge] = {}
 
-    def add(self, source: str, target: str, kind: str, exploitability: float, label: str, **evidence: Any) -> None:
+    def add(
+        self, source: str, target: str, kind: str, exploitability: float, label: str, **evidence: Any
+    ) -> None:
         key = (source, target, kind)
         existing = self.edges.get(key)
         if existing is None or exploitability > existing.exploitability:
