@@ -37,7 +37,7 @@ import ipaddress
 from dataclasses import dataclass
 from typing import Any
 
-from domain.network.proposals import ProposedChange
+from domain.network.proposals import ProposedChange, wide_cidr_warning
 from domain.network.reachability import (
     ALLOWED,
     BLOCKED,
@@ -183,6 +183,10 @@ def apply_change(config: NetworkConfig, change: ProposedChange) -> AppliedChange
                     ),
                 }
             )
+
+    wide = wide_cidr_warning(change)
+    if wide:
+        warnings.append({"code": "WIDE_CIDR", "message": wide})
 
     modified_sg = dataclasses.replace(sg, ingress=tuple(new_ingress))
     groups = tuple(modified_sg if g.id == sg.id else g for g in config.security_groups)
@@ -430,8 +434,8 @@ def simulate(
     introduced = [f for f in after_findings if _finding_key(f) not in before_keys]
     remaining = [f for f in after_findings if _finding_key(f) in before_keys]
     findings = {
-        "before_summary": summarize(before_findings),
-        "after_summary": summarize(after_findings),
+        "before_summary": summarize(before_findings, len(config.security_groups)),
+        "after_summary": summarize(after_findings, len(applied.config.security_groups)),
         "resolved": [_finding_view(f) for f in resolved],
         "remaining": [_finding_view(f) for f in remaining],
         "introduced": [_finding_view(f) for f in introduced],

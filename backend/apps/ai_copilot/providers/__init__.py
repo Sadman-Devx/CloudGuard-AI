@@ -32,7 +32,7 @@ def get_provider() -> LLMProvider:
 
 def provider_status() -> dict:
     meta = settings.AI_PROVIDER == "meta"
-    configured = bool(settings.META_API_KEY and settings.META_MODEL_ID)
+    configured = bool(settings.META_API_KEY and settings.META_MODEL_ID and settings.META_API_BASE_URL)
     return {
         "provider": "meta" if meta else "mock",
         "model": settings.META_MODEL_ID if meta else MockProvider.model,

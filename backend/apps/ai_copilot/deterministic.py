@@ -9,6 +9,15 @@ from __future__ import annotations
 
 from typing import Any
 
+from domain.network.rules import ADMIN_RULE_IDS, DATABASE_RULE_IDS
+
+
+def _all_exact_world(finding: dict[str, Any]) -> bool:
+    """False when any matching rule is open to the world only together with other rules."""
+    return all(
+        m.get("cidr") == "0.0.0.0/0" and not m.get("split_cidr") for m in finding.get("matching_rules", [])
+    )
+
 
 def answer_from_payload(payload: dict[str, Any]) -> dict[str, Any]:
     finding = payload["finding"]
@@ -32,7 +41,7 @@ def answer_from_payload(payload: dict[str, Any]) -> dict[str, Any]:
         "are not part of this finding."
     )
 
-    if rule_id in ("SG-001", "SG-002") and port:
+    if rule_id in ADMIN_RULE_IDS and port:
         service = finding.get("service") or f"port {port}"
         explanation = (
             f"{sg_id} lets anyone on the internet try to connect to {service} (tcp/{port}). Administration "
@@ -43,7 +52,7 @@ def answer_from_payload(payload: dict[str, Any]) -> dict[str, Any]:
         assumptions.append(
             "Administrators can use a bastion host, VPN or Session Manager instead of open access."
         )
-    elif rule_id in ("SG-003", "SG-004") and port:
+    elif rule_id in DATABASE_RULE_IDS and port:
         service = finding.get("service") or f"port {port}"
         explanation = (
             f"{sg_id} accepts {service} (tcp/{port}) connections from any address. A database should only "
@@ -74,13 +83,25 @@ def answer_from_payload(payload: dict[str, Any]) -> dict[str, Any]:
             "the narrowest source."
         )
         assumptions.append("The services that need to be reachable are not known from the configuration.")
-    else:
+    elif rule_id == "SG-006":
         explanation = (
             f"{sg_id} allows all outbound traffic. This is the AWS default and is often intentional, but it "
             "lets a compromised instance reach any destination. Restrict it to the destinations the "
             "workload needs if you can."
         )
         assumptions.append("The outbound destinations the workload needs are not known.")
+    else:
+        explanation = (
+            f"{sg_id} has a risky rule ({rule_id}). {context} Review the matching rules and limit the source "
+            "to the narrowest trusted network."
+        )
+
+    if proposal is not None and not _all_exact_world(finding):
+        proposal = None
+        assumptions.append(
+            "The open access is split across several CIDR ranges, so no single rule can be replaced "
+            "automatically; edit the listed rules by hand."
+        )
 
     return {
         "explanation": explanation,

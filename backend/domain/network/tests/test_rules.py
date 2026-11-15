@@ -40,8 +40,8 @@ def set_egress(data, sg_id, rules):
 # ------------------------------------------------------------------ catalogue
 
 
-def test_catalogue_has_all_six_rules_with_remediation_and_limitations():
-    assert sorted(RULES) == [f"SG-00{i}" for i in range(1, 7)]
+def test_catalogue_has_all_rules_with_remediation_and_limitations():
+    assert sorted(RULES) == [f"SG-{i:03d}" for i in range(1, 16)]
     for info in RULES.values():
         assert info.title and info.description and info.remediation and info.limitations
 
@@ -154,7 +154,21 @@ def test_all_traffic_ingress_is_sg005_and_suppresses_port_findings(valid_config)
     findings = run(valid_config)
     assert [f.rule_id for f in findings if f.resource_id == "sg-1" and f.rule_id != "SG-006"] == ["SG-005"]
     sg005 = next(f for f in findings if f.rule_id == "SG-005")
-    assert sg005.evidence["also_covers"] == {"SG-001": 22, "SG-002": 3389, "SG-003": 5432, "SG-004": 3306}
+    assert sg005.evidence["also_covers"] == {
+        "SG-001": 22,
+        "SG-002": 3389,
+        "SG-003": 5432,
+        "SG-004": 3306,
+        "SG-007": 1433,
+        "SG-008": 27017,
+        "SG-009": 6379,
+        "SG-010": 9200,
+        "SG-011": 445,
+        "SG-012": 23,
+        "SG-013": 21,
+        "SG-014": 2375,
+        "SG-015": 11211,
+    }
     assert sg005.severity == "critical"  # internet-facing candidate
 
 

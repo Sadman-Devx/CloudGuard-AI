@@ -25,6 +25,8 @@ MAX_LIST_ITEMS = 8
 MAX_ITEM = 300
 MAX_UNCERTAINTY = 600
 MIN_PREFIX = 8
+# Below this prefix a restricted CIDR is still accepted but flagged (a /8 is 16 million addresses).
+WARN_PREFIX = 16
 
 _CONTROL = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
 
@@ -81,6 +83,22 @@ def clean_text(value: Any, limit: int) -> str | None:
     if len(text) > limit:
         text = text[: limit - 1].rstrip() + "…"
     return text
+
+
+def wide_cidr_warning(change: ProposedChange) -> str | None:
+    """A human-readable warning when ``new_cidr`` is broader than ``/WARN_PREFIX``."""
+    if not change.new_cidr:
+        return None
+    try:
+        network = ipaddress.ip_network(change.new_cidr, strict=False)
+    except ValueError:
+        return None
+    if network.prefixlen >= WARN_PREFIX:
+        return None
+    return (
+        f"{change.new_cidr} is broader than /{WARN_PREFIX} ({network.num_addresses:,} addresses). "
+        "Confirm it is one trusted network (office or VPN) and not a whole private range."
+    )
 
 
 def _int_port(value: Any) -> int | None:
@@ -221,6 +239,10 @@ def parse_answer(raw: Any, config: NetworkConfig, finding_sg_id: str) -> Answer:
             change = validate_change(raw["proposed_change"], config, finding_sg_id)
         except ProposalError as exc:
             errors.extend(f"proposed_change: {e}" for e in exc.errors)
+        else:
+            warning = wide_cidr_warning(change)
+            if warning and len(assumptions) < MAX_LIST_ITEMS:
+                assumptions.append(warning)
 
     if errors:
         raise ProposalError(errors)

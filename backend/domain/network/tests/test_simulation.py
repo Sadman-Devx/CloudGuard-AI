@@ -125,7 +125,8 @@ def test_probe_ports():
     everything = ProposedChange("remove_ingress_rule", "sg", "-1", None, None)
     assert probe_ports(tcp_one) == (("tcp", 5432),)
     assert probe_ports(tcp_range) == (("tcp", 5000), ("tcp", 5001))
-    assert probe_ports(everything) == (("tcp", 22), ("tcp", 3306), ("tcp", 3389), ("tcp", 5432))
+    ports = (21, 22, 23, 445, 1433, 2375, 3306, 3389, 5432, 6379, 9200, 11211, 27017)
+    assert probe_ports(everything) == tuple(("tcp", p) for p in ports)
 
 
 @pytest.mark.parametrize(

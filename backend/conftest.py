@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 
 import pytest
+from django.core.cache import cache
 
 FIXTURES_DIR = Path(__file__).resolve().parents[1] / "sample_data" / "aws"
 
@@ -75,6 +76,14 @@ _VALID_CONFIG = {
         }
     ],
 }
+
+
+@pytest.fixture(autouse=True)
+def _clear_throttle_cache():
+    """Rate-limit counters live in the cache; start every test with a clean one."""
+    cache.clear()
+    yield
+    cache.clear()
 
 
 @pytest.fixture

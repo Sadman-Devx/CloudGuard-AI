@@ -337,6 +337,7 @@ def test_get_provider_selects_by_setting(settings):
     settings.AI_PROVIDER = "mock"
     assert providers_module.get_provider().name == "mock"
     settings.AI_PROVIDER, settings.META_API_KEY, settings.META_MODEL_ID = "meta", "k", "muse-x"
+    settings.META_API_BASE_URL = "https://meta-api.example.test"
     provider = providers_module.get_provider()
     assert provider.name == "meta" and provider.model == "muse-x"
     assert providers_module.provider_status()["is_meta_model"] is True

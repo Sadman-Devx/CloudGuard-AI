@@ -29,8 +29,8 @@ class MetaModelProvider:
         timeout: float,
         json_mode: bool = False,
     ):
-        if not api_key or not model:
-            raise ProviderNotConfigured("META_API_KEY and META_MODEL_ID must both be set.")
+        if not api_key or not model or not base_url:
+            raise ProviderNotConfigured("META_API_KEY, META_MODEL_ID and META_API_BASE_URL must all be set.")
         self.model = model
         self._key = api_key
         self._url = base_url.rstrip("/") + "/" + path.lstrip("/")

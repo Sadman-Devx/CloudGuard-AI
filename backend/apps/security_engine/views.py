@@ -8,7 +8,7 @@ from rest_framework.views import APIView
 from apps.cloud_resources.models import ConfigurationSnapshot
 from common.exceptions import ConfigValidationFailed
 from domain.network.rules import RULES, SEVERITIES
-from domain.network.scoring import compute_score
+from domain.network.scoring import compute_score_from_summary
 
 from .models import SecurityFinding
 from .serializers import AnalysisSerializer, FindingSerializer
@@ -19,7 +19,7 @@ def _score(analysis):
     """Score of the *whole* analysis (not of a filtered list), or None before the first run."""
     if analysis is None:
         return None
-    return compute_score((analysis.summary or {}).get("by_severity"))
+    return compute_score_from_summary(analysis.summary)
 
 
 def _payload(snapshot, analysis, findings):

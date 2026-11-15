@@ -27,7 +27,7 @@
 <body>
 <svg id="graph"></svg>
 <aside>
-  <p class="muted">Synthetic demo graph, separate from your imported snapshots. No cloud account is queried or changed.</p>
+  <p class="muted" id="source-note">Synthetic demo graph. Open this page with ?snapshot=ID to analyse an imported snapshot. No cloud account is queried or changed.</p>
   <h2>Top attack paths</h2><div id="paths" class="muted">Loading…</div>
   <h2>Choke points <span class="muted">(fix these first)</span></h2><div id="chokes"></div>
   <h2>Blast radius</h2><div id="blast" class="muted">Click a node to compute its blast radius.</div>
@@ -36,7 +36,11 @@
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
 <script>
-const API = "/api/attack-path/";
+const snapshotId = new URLSearchParams(location.search).get("snapshot");
+const API = snapshotId && /^\d+$/.test(snapshotId) ? `/api/snapshots/${snapshotId}/attack-path/` : "/api/attack-path/";
+if (snapshotId && /^\d+$/.test(snapshotId)) {
+  document.getElementById("source-note").textContent = `Built from imported snapshot #${snapshotId}. No cloud account is queried or changed.`;
+}
 const COLORS = { internet:"#667085", load_balancer:"#2e90fa", ec2:"#7a5af8", iam_role:"#f79009",
                  s3:"#12b76a", rds:"#d92d20", lambda:"#ee46bc" };
 const el = id => document.getElementById(id);

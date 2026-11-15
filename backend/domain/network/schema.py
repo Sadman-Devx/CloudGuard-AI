@@ -19,6 +19,8 @@ import re
 from dataclasses import dataclass
 from typing import Any
 
+from domain.network.extensions import parse_extensions
+
 SCHEMA_VERSION = "1.0"
 
 SUPPORTED_PROTOCOLS = ("tcp", "udp", "icmp", "-1")
@@ -445,6 +447,21 @@ class _Validator:
 
     # ---- top level ------------------------------------------------------
 
+    def _check_extensions(self, raw: Any, vpcs, subnets, igws, route_tables, sgs, nacls, instances) -> None:
+        """Validate the optional ``extensions`` object (see ``domain/network/extensions.py``)."""
+        _, issues = parse_extensions(
+            raw,
+            instance_ids={v.id for _, v in instances},
+            subnet_ids={v.id for _, v in subnets},
+            security_group_ids={v.id for _, v in sgs},
+            vpc_ids={v.id for _, v in vpcs},
+            taken_ids={
+                v.id for group in (vpcs, subnets, igws, route_tables, sgs, nacls, instances) for _, v in group
+            },
+        )
+        for path, code, message in issues:
+            self.c.error(path, code, message)
+
     def run(self) -> ValidationResult:
         root = self._object(self.data, "")
         if root is None:
@@ -454,7 +471,7 @@ class _Validator:
             root,
             "",
             required={"schema_version", "vpcs"},
-            optional={"name", "region", *_SECTION_KEYS},
+            optional={"name", "region", "extensions", *_SECTION_KEYS},
         )
         if "schema_version" in root and root["schema_version"] != SCHEMA_VERSION:
             self.c.error(
@@ -491,6 +508,10 @@ class _Validator:
         self._check_sg_refs()
         self._check_nacls(nacls)
         self._check_instances(instances)
+        if "extensions" in root:
+            self._check_extensions(
+                root["extensions"], vpcs, subnets, igws, route_tables, sgs, nacls, instances
+            )
         self._warn_unused(route_tables, sgs, subnets, instances)
 
         if self.c.errors:

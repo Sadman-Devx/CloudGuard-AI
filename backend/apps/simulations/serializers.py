@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from domain.network.scoring import compare_scores
+from domain.network.scoring import compare_summaries
 from domain.network.simulation import MAX_REQUIRED_PATHS
 
 from .models import Simulation
@@ -74,11 +74,13 @@ class SimulationSerializer(serializers.ModelSerializer):
         there is no migration.
         """
         findings = (obj.result_json or {}).get("findings") or {}
-        before = (findings.get("before_summary") or {}).get("by_severity")
-        after = (findings.get("after_summary") or {}).get("by_severity")
-        if before is None or after is None:
+        before = findings.get("before_summary")
+        after = findings.get("after_summary")
+        if not isinstance(before, dict) or not isinstance(after, dict):
             return None
-        return compare_scores(before, after)
+        if before.get("by_severity") is None or after.get("by_severity") is None:
+            return None
+        return compare_summaries(before, after)
 
 
 class SimulationListSerializer(SimulationSerializer):
