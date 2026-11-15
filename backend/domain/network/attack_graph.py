@@ -52,6 +52,7 @@ from domain.network.topology import build_topology
 ATTACK_GRAPH_VERSION = "1.0"
 
 MAX_EXPANSIONS = 200_000
+_TIE_TOLERANCE = 1e-9  # float noise when comparing a bound with a real risk
 MAX_PATH_EVALUATIONS = 3_000  # reachability questions asked while building one graph
 MAX_PORTS_PER_INSTANCE = 12
 UNVERIFIED_FACTOR = 0.5
@@ -218,15 +219,15 @@ class AttackGraph:
         open_states: list[tuple] = []
         for s in sources:
             if s in self.nodes and s in bound and s not in target_set:
-                heapq.heappush(open_states, (-bound[s], next(counter), s, (s,), (), 1.0))
+                heapq.heappush(open_states, (-bound[s], -1, next(counter), s, (s,), (), 1.0))
 
         top: list[tuple[float, int, dict]] = []  # min-heap of the best top_k results
         expanded = 0
         truncated = False
         while open_states:
-            neg_priority, _, node, path, edges, prob = heapq.heappop(open_states)
+            neg_priority, _, _, node, path, edges, prob = heapq.heappop(open_states)
             floor = top[0][0] if len(top) >= top_k else 0.0
-            if -neg_priority <= floor:
+            if -neg_priority <= floor * (1 + _TIE_TOLERANCE):
                 break  # nothing left can beat the current k-th result
             expanded += 1
             if expanded > max_expansions:
@@ -269,9 +270,14 @@ class AttackGraph:
                 if p < min_prob:
                     continue
                 priority = p * bound[nxt]
-                if priority <= floor:
+                if priority <= floor * (1 + _TIE_TOLERANCE):
                     continue
-                heapq.heappush(open_states, (-priority, next(counter), nxt, path + (nxt,), edges + (e,), p))
+                # equal priorities: deeper partial paths first, so a first full path is found quickly
+                depth_key = -(len(edges) + 2)
+                heapq.heappush(
+                    open_states,
+                    (-priority, depth_key, next(counter), nxt, path + (nxt,), edges + (e,), p),
+                )
 
         self.last_search = {"expanded": expanded, "truncated": truncated}
         return sorted((item[2] for item in top), key=lambda r: r["risk"], reverse=True)

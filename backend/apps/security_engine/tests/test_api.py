@@ -35,7 +35,7 @@ def test_analyze_exposed_database_persists_findings(client, project):
     response = client.post(f"/api/snapshots/{sid}/analyze/")
     assert response.status_code == 200
     body = response.json()
-    assert body["analysis"]["rules_version"] == "1.0"
+    assert body["analysis"]["rules_version"] == "1.1"
     assert body["analysis"]["summary"]["total"] == 4
     assert [(f["rule_id"], f["resource_id"]) for f in body["results"]] == [
         ("SG-001", "sg-web"),
@@ -121,7 +121,7 @@ def test_finding_detail(client, project):
 
 def test_rule_catalog(client, db):
     body = client.get("/api/rules/").json()
-    assert [r["id"] for r in body["results"]] == [f"SG-00{i}" for i in range(1, 7)]
+    assert [r["id"] for r in body["results"]] == [f"SG-{i:03d}" for i in range(1, 16)]
     assert all(r["limitations"] and r["remediation"] for r in body["results"])
 
 

@@ -246,7 +246,13 @@ def test_deleting_project_cascades(client, project, valid_config):
 
 def test_fixture_listing(client, db):
     names = {f["name"] for f in client.get("/api/fixtures/").json()["results"]}
-    assert names == {"safe_network", "exposed_database", "broken_app_connectivity", "public_database"}
+    assert names == {
+        "safe_network",
+        "exposed_database",
+        "broken_app_connectivity",
+        "public_database",
+        "attack_path_demo",
+    }
 
 
 def test_import_from_fixture(client, project):
