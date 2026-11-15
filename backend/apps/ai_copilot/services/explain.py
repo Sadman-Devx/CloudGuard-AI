@@ -5,7 +5,9 @@ from __future__ import annotations
 import json
 import logging
 import re
+import threading
 import time
+from contextlib import contextmanager
 from datetime import timedelta
 
 from django.conf import settings
@@ -32,11 +34,37 @@ _FENCE = re.compile(r"^```[a-zA-Z]*\s*|\s*```$")
 
 __all__ = [
     "AIBudgetExceeded",
+    "AIBusy",
     "SnapshotIncompatible",
     "explain_finding",
     "interaction_payload",
     "latest_interaction",
 ]
+
+
+class AIBusy(APIException):
+    status_code = status.HTTP_503_SERVICE_UNAVAILABLE
+    default_detail = "The AI service is busy. Try again in a few seconds."
+    default_code = "ai_busy"
+
+
+# Model calls are slow and block a worker thread, so only a few may run at once; the rest are
+# turned away quickly instead of using up every thread of the API process.
+_MODEL_SLOTS = threading.BoundedSemaphore(int(getattr(settings, "AI_MAX_CONCURRENT", 3)))
+
+
+@contextmanager
+def _model_slot(provider_name: str):
+    if provider_name != "meta":  # the offline provider is instant
+        yield
+        return
+    wait = float(getattr(settings, "AI_QUEUE_WAIT_SECONDS", 2))
+    if not _MODEL_SLOTS.acquire(timeout=wait):
+        raise AIBusy()
+    try:
+        yield
+    finally:
+        _MODEL_SLOTS.release()
 
 
 class AIBudgetExceeded(APIException):
@@ -139,11 +167,22 @@ def explain_finding(finding: SecurityFinding, *, refresh: bool = False) -> tuple
     answer = None
     model_id = provider.model
 
+    deadline = float(getattr(settings, "AI_TOTAL_DEADLINE_SECONDS", 40))
+    per_attempt = float(getattr(settings, "AI_TIMEOUT_SECONDS", 20))
     for _ in range(max(1, settings.AI_MAX_ATTEMPTS)):
+        if attempts and time.monotonic() - started + per_attempt > deadline:
+            reason = reason or "The model did not answer within the time budget."
+            break
         attempts += 1
         system, user = build_messages(payload, repair)
         try:
-            result = provider.complete(system, user)
+            with _model_slot(provider.name):
+                result = provider.complete(system, user)
+        except AIBusy:
+            if attempts == 1:
+                raise
+            reason = reason or "The AI service was busy for the retry."
+            break
         except ProviderError as exc:
             reason = str(exc)
             logger.warning("AI provider error (attempt %s): %s", attempts, reason)

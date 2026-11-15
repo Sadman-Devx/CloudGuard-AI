@@ -40,6 +40,7 @@ INSTALLED_APPS = [
     "apps.security_engine.apps.SecurityEngineConfig",
     "apps.ai_copilot.apps.AiCopilotConfig",
     "apps.simulations.apps.SimulationsConfig",
+    "apps.attack_paths.apps.AttackPathsConfig",
 ]
 
 MIDDLEWARE = [
@@ -149,15 +150,25 @@ MAX_JSON_DEPTH = int(os.environ.get("MAX_JSON_DEPTH", 12))
 # Meta Model API (Day 5). Everything is configurable; nothing is hard-coded to one model.
 META_API_KEY = os.environ.get("META_API_KEY", "")
 META_MODEL_ID = os.environ.get("META_MODEL_ID", "")
-META_API_BASE_URL = os.environ.get("META_API_BASE_URL", "") or "https://api.meta.ai"
+# No default URL on purpose: copy the exact base URL and path from your Meta API documentation and
+# check them with `python manage.py check_meta_provider`.
+META_API_BASE_URL = os.environ.get("META_API_BASE_URL", "").strip()
 META_CHAT_PATH = os.environ.get("META_CHAT_PATH", "/v1/chat/completions")
 # Ask the API for JSON mode (response_format). Off by default: output is validated either way.
 META_JSON_MODE = os.environ.get("META_JSON_MODE", "false").lower() in ("1", "true", "yes")
 
 # "meta" calls the Meta Model API; "mock" is an offline demo provider that is always labelled as
 # such in the UI. Default: meta when a key and model are configured, otherwise mock.
-AI_PROVIDER = os.environ.get("AI_PROVIDER", "") or ("meta" if META_API_KEY and META_MODEL_ID else "mock")
-AI_TIMEOUT_SECONDS = float(os.environ.get("AI_TIMEOUT_SECONDS", 30))
+AI_PROVIDER = os.environ.get("AI_PROVIDER", "") or (
+    "meta" if META_API_KEY and META_MODEL_ID and META_API_BASE_URL else "mock"
+)
+AI_TIMEOUT_SECONDS = float(os.environ.get("AI_TIMEOUT_SECONDS", 20))
+# Model calls block a worker thread: at most AI_MAX_CONCURRENT run at once (others wait up to
+# AI_QUEUE_WAIT_SECONDS, then get HTTP 503) and one request never spends more than
+# AI_TOTAL_DEADLINE_SECONDS across its attempts.
+AI_MAX_CONCURRENT = int(os.environ.get("AI_MAX_CONCURRENT", 3))
+AI_QUEUE_WAIT_SECONDS = float(os.environ.get("AI_QUEUE_WAIT_SECONDS", 2))
+AI_TOTAL_DEADLINE_SECONDS = float(os.environ.get("AI_TOTAL_DEADLINE_SECONDS", 40))
 AI_MAX_ATTEMPTS = int(os.environ.get("AI_MAX_ATTEMPTS", 2))
 # Spending guard: real (non-mock) model calls allowed per rolling hour across the whole app.
 AI_MAX_REQUESTS_PER_HOUR = int(os.environ.get("AI_MAX_REQUESTS_PER_HOUR", 60))
