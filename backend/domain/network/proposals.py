@@ -17,7 +17,17 @@ from typing import Any
 from domain.network.rules import WORLD_CIDR
 from domain.network.schema import NetworkConfig, SecurityGroup
 
+# What the AI copilot may propose for a finding (open-to-the-world ingress rules).
 ACTIONS = ("replace_ingress_source", "restrict_ingress_cidr", "remove_ingress_rule")
+# Extra changes a person can simulate through the API (never proposed by the model):
+#   restrict_egress_rule  narrow an egress rule open to 0.0.0.0/0 to one destination and port range
+#   add_ingress_rule      allow one more source on a port range (fixes a blocked path)
+#   remove_nacl_rule      delete a *deny* entry of a network ACL that covers the group's instances
+#   add_nacl_allow_rule   add an allow entry to such a network ACL
+EXTRA_ACTIONS = ("restrict_egress_rule", "add_ingress_rule", "remove_nacl_rule", "add_nacl_allow_rule")
+ALL_ACTIONS = ACTIONS + EXTRA_ACTIONS
+DIRECTIONS = ("ingress", "egress")
+NACL_RULE_NUMBERS = (1, 32766)
 PROTOCOLS = ("tcp", "udp", "-1")
 
 MAX_EXPLANATION = 1500
@@ -44,11 +54,18 @@ class ProposedChange:
     protocol: str
     from_port: int | None
     to_port: int | None
-    new_source_security_group_id: str | None = None
-    new_cidr: str | None = None
+    new_source_security_group_id: str | None = None  # for egress changes: the destination group
+    new_cidr: str | None = None  # for egress changes: the destination CIDR
+    # Only used by EXTRA_ACTIONS (None otherwise, and then left out of ``as_dict``):
+    allow_protocol: str | None = None  # restrict_egress_rule: protocol of the replacement rule
+    allow_from_port: int | None = None
+    allow_to_port: int | None = None
+    acl_id: str | None = None  # NACL actions
+    direction: str | None = None  # NACL actions: "ingress" | "egress"
+    rule_number: int | None = None  # NACL actions
 
     def as_dict(self) -> dict[str, Any]:
-        return {
+        data: dict[str, Any] = {
             "action": self.action,
             "security_group_id": self.security_group_id,
             "protocol": self.protocol,
@@ -57,6 +74,18 @@ class ProposedChange:
             "new_source_security_group_id": self.new_source_security_group_id,
             "new_cidr": self.new_cidr,
         }
+        for key in (
+            "allow_protocol",
+            "allow_from_port",
+            "allow_to_port",
+            "acl_id",
+            "direction",
+            "rule_number",
+        ):
+            value = getattr(self, key)
+            if value is not None:
+                data[key] = value
+        return data
 
 
 @dataclass(frozen=True)
@@ -125,15 +154,201 @@ def _world_rule_covers(sg: SecurityGroup, protocol: str, low: int | None, high: 
     return False
 
 
-def validate_change(raw: Any, config: NetworkConfig, finding_sg_id: str) -> ProposedChange:
-    """Validate one proposed change. Raises ``ProposalError`` listing every problem found."""
+def _checked_cidr(value: Any, what: str, errors: list[str]) -> str | None:
+    """An IPv4 CIDR that is neither the whole internet nor absurdly wide."""
+    try:
+        network = ipaddress.ip_network(str(value), strict=False)
+        if network.version != 4 or str(network) == WORLD_CIDR or network.prefixlen < MIN_PREFIX:
+            raise ValueError
+        return str(network)
+    except ValueError:
+        errors.append(f"{what} must be an IPv4 CIDR narrower than /{MIN_PREFIX} and not {WORLD_CIDR}.")
+        return None
+
+
+def _port_range(raw: dict, prefix: str, errors: list[str]) -> tuple[int | None, int | None]:
+    shorthand = raw.get(f"{prefix}port")
+    low = _int_port(raw.get(f"{prefix}from_port", shorthand))
+    high = _int_port(raw.get(f"{prefix}to_port", shorthand))
+    if low is None or high is None or low > high:
+        errors.append(f"{prefix}port (or {prefix}from_port/{prefix}to_port) must be valid ports in 0-65535.")
+        return None, None
+    return low, high
+
+
+def _world_egress_covers(sg: SecurityGroup, protocol: str, low: int | None, high: int | None) -> bool:
+    for rule in sg.egress:
+        if rule.cidr != WORLD_CIDR:
+            continue
+        if rule.protocol == "-1":
+            return True
+        if rule.protocol == protocol and None not in (rule.from_port, rule.to_port, low, high):
+            if rule.from_port <= low and high <= rule.to_port:
+                return True
+    return False
+
+
+def _acl_in_scope(config: NetworkConfig, acl_subnets: tuple[str, ...], sg_id: str) -> bool:
+    """A network ACL may only be changed through a group if it covers one of that group's instances."""
+    return any(i.subnet_id in acl_subnets and sg_id in i.security_group_ids for i in config.instances)
+
+
+def _validate_extended(raw: dict, config: NetworkConfig, finding_sg_id: str) -> ProposedChange:
+    errors: list[str] = []
+    action = raw["action"]
+    sg = _find_group(config, raw.get("security_group_id"))
+    if sg is None:
+        errors.append("security_group_id does not exist in this snapshot.")
+    elif sg.id != finding_sg_id:
+        errors.append(f"A proposal for this finding may only change {finding_sg_id}.")
+
+    new_sg = raw.get("new_source_security_group_id") or None
+    new_cidr = raw.get("new_cidr") or None
+    fields: dict[str, Any] = {"action": action, "security_group_id": sg.id if sg else None}
+
+    def destination(label: str) -> None:
+        """Exactly one of new_cidr / new_source_security_group_id."""
+        nonlocal new_sg, new_cidr
+        if bool(new_sg) == bool(new_cidr):
+            errors.append(
+                f"{action} needs exactly one of new_cidr or new_source_security_group_id ({label})."
+            )
+            new_sg = new_cidr = None
+            return
+        if new_cidr:
+            new_cidr = _checked_cidr(new_cidr, "new_cidr", errors)
+        else:
+            other = _find_group(config, new_sg)
+            if other is None:
+                errors.append("new_source_security_group_id does not exist in this snapshot.")
+                new_sg = None
+            elif sg is not None and other.vpc_id != sg.vpc_id:
+                errors.append("new_source_security_group_id must be in the same VPC.")
+                new_sg = None
+
+    protocol = raw.get("protocol")
+    low = high = None
+
+    if action in ("restrict_egress_rule", "add_ingress_rule"):
+        if protocol not in PROTOCOLS or (action == "add_ingress_rule" and protocol == "-1"):
+            allowed = PROTOCOLS if action == "restrict_egress_rule" else ("tcp", "udp")
+            errors.append(f"protocol must be one of {', '.join(allowed)}.")
+        elif protocol in ("tcp", "udp"):
+            low, high = _port_range(raw, "", errors)
+
+    if action == "restrict_egress_rule":
+        destination("destination")
+        allow_protocol = raw.get("allow_protocol")
+        if allow_protocol not in ("tcp", "udp"):
+            errors.append("allow_protocol must be tcp or udp.")
+        elif protocol in ("tcp", "udp") and allow_protocol != protocol:
+            errors.append(
+                "allow_protocol must match protocol unless the rule being narrowed is all-traffic (-1)."
+            )
+        a_low, a_high = _port_range(raw, "allow_", errors)
+        if low is not None and None not in (a_low, a_high) and not (low <= a_low and a_high <= high):
+            errors.append("The allowed ports must lie inside the ports of the rule being narrowed.")
+        if (
+            sg is not None
+            and protocol in PROTOCOLS
+            and not errors
+            and not _world_egress_covers(sg, protocol, low, high)
+        ):
+            errors.append(
+                "No egress rule open to 0.0.0.0/0 matches the proposed protocol/ports, "
+                "so there is nothing to narrow."
+            )
+        fields.update(allow_protocol=allow_protocol, allow_from_port=a_low, allow_to_port=a_high)
+    elif action == "add_ingress_rule":
+        destination("source")
+        if sg is not None and not errors:
+            for rule in sg.ingress:
+                if (rule.protocol, rule.from_port, rule.to_port, rule.cidr, rule.peer_security_group_id) == (
+                    protocol,
+                    low,
+                    high,
+                    new_cidr,
+                    new_sg,
+                ):
+                    errors.append("An identical ingress rule already exists.")
+                    break
+    else:  # NACL actions
+        direction = raw.get("direction")
+        if direction not in DIRECTIONS:
+            errors.append(f"direction must be one of {', '.join(DIRECTIONS)}.")
+        acl = next((a for a in config.network_acls if a.id == raw.get("acl_id")), None)
+        if acl is None:
+            errors.append("acl_id does not exist in this snapshot.")
+        elif sg is not None and not _acl_in_scope(config, acl.subnet_ids, sg.id):
+            errors.append(f"{acl.id} does not cover any instance that uses {sg.id}.")
+        number = raw.get("rule_number")
+        if (
+            isinstance(number, bool)
+            or not isinstance(number, int)
+            or not NACL_RULE_NUMBERS[0] <= number <= NACL_RULE_NUMBERS[1]
+        ):
+            errors.append(
+                f"rule_number must be an integer from {NACL_RULE_NUMBERS[0]} to {NACL_RULE_NUMBERS[1]}."
+            )
+        entries = ()
+        if acl is not None and direction in DIRECTIONS:
+            entries = acl.ingress if direction == "ingress" else acl.egress
+        existing = next((e for e in entries if e.rule_number == number), None)
+        if action == "remove_nacl_rule":
+            if acl is not None and direction in DIRECTIONS and isinstance(number, int):
+                if existing is None:
+                    errors.append(f"{acl.id} has no {direction} rule number {number}.")
+                elif existing.action != "deny":
+                    errors.append(
+                        "Only deny entries can be removed; removing an allow entry would close access."
+                    )
+                else:
+                    protocol, low, high = existing.protocol, existing.from_port, existing.to_port
+                    new_cidr = None
+        else:  # add_nacl_allow_rule
+            if protocol not in ("tcp", "udp"):
+                errors.append("protocol must be tcp or udp.")
+            else:
+                low, high = _port_range(raw, "", errors)
+            if new_sg:
+                errors.append("add_nacl_allow_rule takes new_cidr, not a security group.")
+            new_cidr = _checked_cidr(new_cidr, "new_cidr", errors)
+            new_sg = None
+            if existing is not None:
+                errors.append(f"{acl.id} already has a {direction} rule number {number}.")
+        fields.update(acl_id=raw.get("acl_id"), direction=direction, rule_number=number)
+
+    if errors:
+        raise ProposalError(errors)
+    return ProposedChange(
+        action=action,
+        security_group_id=sg.id,
+        protocol=protocol,
+        from_port=low,
+        to_port=high,
+        new_source_security_group_id=new_sg,
+        new_cidr=new_cidr,
+        **{k: v for k, v in fields.items() if k not in ("action", "security_group_id")},
+    )
+
+
+def validate_change(
+    raw: Any, config: NetworkConfig, finding_sg_id: str, *, allowed: tuple[str, ...] = ACTIONS
+) -> ProposedChange:
+    """Validate one proposed change. Raises ``ProposalError`` listing every problem found.
+
+    ``allowed`` is the set of actions accepted from this caller: the AI copilot gets ``ACTIONS``;
+    the simulation API passes ``ALL_ACTIONS`` for changes a person built by hand.
+    """
     if not isinstance(raw, dict):
         raise ProposalError(["proposed_change must be an object or null."])
     errors: list[str] = []
 
     action = raw.get("action")
-    if action not in ACTIONS:
-        errors.append(f"action must be one of {', '.join(ACTIONS)}.")
+    if action in EXTRA_ACTIONS and action in allowed:
+        return _validate_extended(raw, config, finding_sg_id)
+    if action not in ACTIONS or action not in allowed:
+        errors.append(f"action must be one of {', '.join(allowed)}.")
 
     sg_id = raw.get("security_group_id")
     sg = _find_group(config, sg_id)

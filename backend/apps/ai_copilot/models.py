@@ -23,6 +23,10 @@ class AIInteraction(models.Model):
     source = models.CharField(max_length=32, choices=Source.choices)
     status = models.CharField(max_length=16, choices=Status.choices)
     prompt_version = models.CharField(max_length=16)
+    # sha256 of (prompt version, provider, model, the finding payload incl. its configuration context).
+    # The same question about the same configuration gets the same key, whichever finding row asks it,
+    # so re-analysing a snapshot does not throw away answers that are still valid.
+    cache_key = models.CharField(max_length=64, blank=True, default="", db_index=True)
     response_json = models.JSONField(default=dict)
     fallback_reason = models.TextField(blank=True)
     attempts = models.PositiveSmallIntegerField(default=1)

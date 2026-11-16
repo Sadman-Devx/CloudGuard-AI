@@ -363,7 +363,9 @@ class _Validator:
         *,
         strict: bool = True,
         prefix_range: tuple[int, int] | None = None,
-    ) -> ipaddress.IPv4Network | None:
+        allow_ipv6: bool = False,
+    ) -> ipaddress.IPv4Network | ipaddress.IPv6Network | None:
+        """Parse a CIDR. IPv6 is only accepted where the caller says so (rule sources, ACL entries)."""
         if not isinstance(value, str):
             self.c.error(path, "invalid_type", "Expected a CIDR string such as '10.0.0.0/24'.")
             return None
@@ -375,7 +377,7 @@ class _Validator:
         except ValueError as exc:
             self.c.error(path, "invalid_cidr", f"Invalid CIDR '{value}': {exc}")
             return None
-        if net.version != 4:
+        if net.version != 4 and not allow_ipv6:
             self.c.error(path, "unsupported_ipv6", "IPv6 is not supported in this version.")
             return None
         if prefix_range and not prefix_range[0] <= net.prefixlen <= prefix_range[1]:
@@ -673,7 +675,7 @@ class _Validator:
                 self.c.error(rpath, "invalid_rule_target", f"Specify exactly one of 'cidr' or '{peer_key}'.")
             cidr = None
             if has_cidr:
-                net = self._cidr(robj["cidr"], _join(rpath, "cidr"), strict=False)
+                net = self._cidr(robj["cidr"], _join(rpath, "cidr"), strict=False, allow_ipv6=True)
                 cidr = str(net) if net else None
             peer = self._ident(robj, peer_key, rpath) if has_peer else None
             description = self._text(robj, "description", rpath)
@@ -721,7 +723,11 @@ class _Validator:
             if "action" in robj and not action_ok:
                 self.c.error(_join(rpath, "action"), "invalid_action", "Action must be 'allow' or 'deny'.")
             ports = self._protocol_ports(robj, rpath)
-            net = self._cidr(robj["cidr"], _join(rpath, "cidr"), strict=False) if "cidr" in robj else None
+            net = (
+                self._cidr(robj["cidr"], _join(rpath, "cidr"), strict=False, allow_ipv6=True)
+                if "cidr" in robj
+                else None
+            )
             if number_ok and action_ok and ports and net:
                 rules.append(NaclRule(number, action, ports[0], str(net), ports[1], ports[2]))
             else:

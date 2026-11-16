@@ -36,6 +36,10 @@ export const ACTION_LABELS = {
   replace_ingress_source: "Replace the open source with a security group",
   restrict_ingress_cidr: "Restrict the source to a narrower CIDR",
   remove_ingress_rule: "Remove the rule open to 0.0.0.0/0",
+  restrict_egress_rule: "Narrow an outbound rule to one destination",
+  add_ingress_rule: "Allow one more source on a port",
+  remove_nacl_rule: "Remove a deny entry of a network ACL",
+  add_nacl_allow_rule: "Add an allow entry to a network ACL",
 };
 
 export function describeChange(change) {
@@ -44,5 +48,13 @@ export function describeChange(change) {
     return `${target}: allow only ${change.new_source_security_group_id}`;
   if (change.action === "restrict_ingress_cidr")
     return `${target}: allow only ${change.new_cidr}`;
+  if (change.action === "restrict_egress_rule")
+    return `${target}: outbound only to ${change.new_cidr ?? change.new_source_security_group_id} on ${change.allow_protocol}/${change.allow_from_port}${change.allow_to_port !== change.allow_from_port ? `-${change.allow_to_port}` : ""}`;
+  if (change.action === "add_ingress_rule")
+    return `${target}: also allow ${change.new_cidr ?? change.new_source_security_group_id}`;
+  if (change.action === "remove_nacl_rule")
+    return `${change.acl_id} ${change.direction}: remove deny rule ${change.rule_number}`;
+  if (change.action === "add_nacl_allow_rule")
+    return `${change.acl_id} ${change.direction}: allow ${change.new_cidr} (rule ${change.rule_number})`;
   return `${target}: remove the 0.0.0.0/0 entry`;
 }

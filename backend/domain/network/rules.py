@@ -1,4 +1,4 @@
-"""Deterministic security rule engine (SG-001 .. SG-015).
+"""Deterministic security rule engine (SG-001 ...).
 
 Pure Python (no Django). Findings come from this code only; an LLM never decides whether
 something is risky. Every finding carries the rule id, the affected resource, the exact rule
@@ -16,36 +16,53 @@ What counts as "open to the world"
   (for example ``0.0.0.0/1`` + ``128.0.0.0/1``). Those findings carry ``split_cidr: true`` in the
   evidence of the matching rules.
 
-Rule families
+Rule registry
 -------------
-=========  =====================================================  =====================
-Family     Rules                                                  Severity (net/priv/-)
-=========  =====================================================  =====================
-admin      SG-001 SSH, SG-002 RDP, SG-011 SMB, SG-012 Telnet,     high / medium / low
-           SG-013 FTP
-remote     SG-014 Docker API (2375)                               critical / high / medium
-database   SG-003 PostgreSQL, SG-004 MySQL, SG-007 MSSQL,         high / medium / low
-           SG-008 MongoDB, SG-009 Redis, SG-010 Elasticsearch,
-           SG-015 Memcached
-all ports  SG-005                                                 critical / high / medium
-egress     SG-006                                                 low / low / info
-=========  =====================================================  =====================
+Port rules are **data**: ``rule_catalog.json`` next to this file lists id, port, service, severity
+family, remediation and the verified CIS mapping of every port rule. To add or change rules
+without touching code, point ``CLOUDGUARD_RULES_FILE`` at a JSON file of the same shape (its
+``port_rules`` are added; an id that already exists is rejected). In code:
 
-Severity depends on context, not just on the port number: columns are internet-facing candidate,
-private / no public path, unattached.
+* ``register_port_rule(...)``  adds one more "port open to the world" rule;
+* ``@register_check(info, family)``  adds a custom per-security-group check. The function gets a
+  ``SecurityGroup`` and returns a list of evidence dicts (use ``rule_evidence``); no evidence, no
+  finding. Severity comes from the family table below, so a plugin cannot invent severities.
+
+Severity families (internet-facing candidate / no public path / unattached)
+---------------------------------------------------------------------------
+=========  ================================================  =====================
+Family     Used by                                           Severity
+=========  ================================================  =====================
+admin      remote administration and legacy file/shell ports  high / medium / low
+database   database and cache ports                           high / medium / low
+remote     remote code execution (Docker API)                critical / high / medium
+all_ports  SG-005                                            critical / high / medium
+egress     SG-006                                            low / low / info
+=========  ================================================  =====================
+
+CIS mapping
+-----------
+Only mappings verified against the CIS AWS Foundations Benchmark (v3.0.0, section 5 Networking:
+5.2 security groups and ``0.0.0.0/0``, 5.3 security groups and ``::/0``) are listed. A rule with
+an empty ``cis`` list has no direct CIS control; nothing is guessed.
 """
 
 from __future__ import annotations
 
 import ipaddress
+import json
+import os
+import re
 from collections.abc import Callable, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
 
 from domain.network.schema import NetworkConfig, SecurityGroup, SecurityGroupRule
 from domain.network.topology import build_topology
 
 RULES_VERSION = "1.1"
+RULES_FILE_ENV = "CLOUDGUARD_RULES_FILE"
 
 WORLD_CIDR = "0.0.0.0/0"
 WORLD_CIDR_V6 = "::/0"
@@ -56,47 +73,23 @@ SEVERITY_RANK = {name: rank for rank, name in enumerate(SEVERITIES)}
 
 RISKY_RULE = "risky_rule"
 POTENTIAL_EXPOSURE = "potential_exposure"
+_CATEGORIES = (RISKY_RULE, POTENTIAL_EXPOSURE)
 
 # Exposure context of a security group
 EXPOSURE_CANDIDATE = "internet_facing_candidate"
 EXPOSURE_NO_PATH = "no_public_path"
 EXPOSURE_UNATTACHED = "unattached"
 
-# rule id -> (port, service). The first four keep their original ids.
-SENSITIVE_PORTS = {
-    "SG-001": (22, "SSH"),
-    "SG-002": (3389, "RDP"),
-    "SG-003": (5432, "PostgreSQL"),
-    "SG-004": (3306, "MySQL"),
-    "SG-007": (1433, "Microsoft SQL Server"),
-    "SG-008": (27017, "MongoDB"),
-    "SG-009": (6379, "Redis"),
-    "SG-010": (9200, "Elasticsearch"),
-    "SG-011": (445, "SMB"),
-    "SG-012": (23, "Telnet"),
-    "SG-013": (21, "FTP"),
-    "SG-014": (2375, "Docker API (unencrypted)"),
-    "SG-015": (11211, "Memcached"),
-}
+_PORT_FAMILIES = ("admin", "database", "remote")
+_RULE_ID = re.compile(r"^[A-Z][A-Z0-9]{1,9}-\d{3}$")
 
-# rule id -> severity family (see the table above)
-RULE_FAMILY = {
-    "SG-001": "admin",
-    "SG-002": "admin",
-    "SG-003": "database",
-    "SG-004": "database",
-    "SG-007": "database",
-    "SG-008": "database",
-    "SG-009": "database",
-    "SG-010": "database",
-    "SG-011": "admin",
-    "SG-012": "admin",
-    "SG-013": "admin",
-    "SG-014": "remote",
-    "SG-015": "database",
-}
-ADMIN_RULE_IDS = frozenset(r for r, f in RULE_FAMILY.items() if f in ("admin", "remote"))
-DATABASE_RULE_IDS = frozenset(r for r, f in RULE_FAMILY.items() if f == "database")
+# ---- registry state (filled below; the three names below are mutated in place) -----------
+# rule id -> (port, service)
+SENSITIVE_PORTS: dict[str, tuple[int, str]] = {}
+# rule id -> severity family
+RULE_FAMILY: dict[str, str] = {}
+ADMIN_RULE_IDS: set[str] = set()  # admin + remote families
+DATABASE_RULE_IDS: set[str] = set()
 
 
 @dataclass(frozen=True)
@@ -107,6 +100,8 @@ class RuleInfo:
     description: str
     remediation: str
     limitations: str
+    family: str = ""
+    cis: tuple[dict[str, str], ...] = field(default_factory=tuple)
 
 
 _COMMON_LIMITATION = (
@@ -115,65 +110,7 @@ _COMMON_LIMITATION = (
     "the service can be reached from the internet."
 )
 
-_ADMIN_FIX = (
-    "Remove the 0.0.0.0/0 source. Allow the port only from a trusted CIDR (office/VPN) or a bastion "
-    "security group, or use AWS Systems Manager Session Manager / a VPN instead."
-)
-_DB_FIX = (
-    "Replace the 0.0.0.0/0 source with the security group of the application tier that needs "
-    "access, and keep the service in a private subnet without a public IP."
-)
-
-
-def _port_rule(rule_id: str, remediation: str, category: str) -> RuleInfo:
-    port, service = SENSITIVE_PORTS[rule_id]
-    return RuleInfo(
-        rule_id,
-        f"{service} ({port}) open to the internet",
-        category,
-        f"An ingress rule allows TCP port {port} from 0.0.0.0/0.",
-        remediation,
-        _COMMON_LIMITATION,
-    )
-
-
 RULES: dict[str, RuleInfo] = {
-    "SG-001": RuleInfo(
-        "SG-001",
-        "SSH (22) open to the internet",
-        RISKY_RULE,
-        "An ingress rule allows TCP port 22 from 0.0.0.0/0.",
-        "Remove the 0.0.0.0/0 source. Allow SSH only from a trusted CIDR (office/VPN) or a bastion "
-        "security group, or use AWS Systems Manager Session Manager instead of open SSH.",
-        _COMMON_LIMITATION,
-    ),
-    "SG-002": RuleInfo(
-        "SG-002",
-        "RDP (3389) open to the internet",
-        RISKY_RULE,
-        "An ingress rule allows TCP port 3389 from 0.0.0.0/0.",
-        "Remove the 0.0.0.0/0 source. Allow RDP only from a trusted CIDR or a bastion security "
-        "group, or use Session Manager / a VPN.",
-        _COMMON_LIMITATION,
-    ),
-    "SG-003": RuleInfo(
-        "SG-003",
-        "PostgreSQL (5432) open to the internet",
-        POTENTIAL_EXPOSURE,
-        "An ingress rule allows TCP port 5432 from 0.0.0.0/0.",
-        "Replace the 0.0.0.0/0 source with the security group of the application tier that needs "
-        "database access, and keep the database in a private subnet without a public IP.",
-        _COMMON_LIMITATION,
-    ),
-    "SG-004": RuleInfo(
-        "SG-004",
-        "MySQL (3306) open to the internet",
-        POTENTIAL_EXPOSURE,
-        "An ingress rule allows TCP port 3306 from 0.0.0.0/0.",
-        "Replace the 0.0.0.0/0 source with the security group of the application tier that needs "
-        "database access, and keep the database in a private subnet without a public IP.",
-        _COMMON_LIMITATION,
-    ),
     "SG-005": RuleInfo(
         "SG-005",
         "All protocols/ports open to the internet",
@@ -182,8 +119,27 @@ RULES: dict[str, RuleInfo] = {
         "Delete the catch-all rule and add one rule per required port and protocol, each limited to "
         "the narrowest source (a security group or a specific CIDR).",
         _COMMON_LIMITATION
-        + " When this rule fires it covers every port rule (SG-001..SG-004 and SG-007..SG-015) for "
-        "the same rule entry; those are not reported separately.",
+        + " When this rule fires it covers every port rule for the same rule entry; those are not "
+        "reported separately.",
+        family="all_ports",
+        cis=(
+            {
+                "benchmark": "CIS AWS Foundations Benchmark",
+                "version": "3.0.0",
+                "control": "5.2",
+                "applies_to": "0.0.0.0/0",
+                "title": "Ensure no security groups allow ingress from 0.0.0.0/0 to remote server "
+                "administration ports",
+            },
+            {
+                "benchmark": "CIS AWS Foundations Benchmark",
+                "version": "3.0.0",
+                "control": "5.3",
+                "applies_to": "::/0",
+                "title": "Ensure no security groups allow ingress from ::/0 to remote server "
+                "administration ports",
+            },
+        ),
     ),
     "SG-006": RuleInfo(
         "SG-006",
@@ -194,23 +150,161 @@ RULES: dict[str, RuleInfo] = {
         "destinations and ports it needs (for example the database security group on 5432).",
         "Context-dependent: unrestricted egress is the AWS default and is often intentional (package "
         "updates, third-party APIs). Treated as a low-severity hygiene warning, not a vulnerability.",
+        family="egress",
     ),
-    "SG-007": _port_rule("SG-007", _DB_FIX, POTENTIAL_EXPOSURE),
-    "SG-008": _port_rule("SG-008", _DB_FIX, POTENTIAL_EXPOSURE),
-    "SG-009": _port_rule("SG-009", _DB_FIX, POTENTIAL_EXPOSURE),
-    "SG-010": _port_rule("SG-010", _DB_FIX, POTENTIAL_EXPOSURE),
-    "SG-011": _port_rule("SG-011", _ADMIN_FIX, RISKY_RULE),
-    "SG-012": _port_rule("SG-012", _ADMIN_FIX, RISKY_RULE),
-    "SG-013": _port_rule("SG-013", _ADMIN_FIX, RISKY_RULE),
-    "SG-014": _port_rule(
-        "SG-014",
-        "Remove the 0.0.0.0/0 source immediately and disable the unencrypted Docker TCP socket; an "
-        "exposed Docker API is usually remote code execution. Use the local socket or TLS with "
-        "client certificates from a trusted CIDR only.",
-        RISKY_RULE,
-    ),
-    "SG-015": _port_rule("SG-015", _DB_FIX, POTENTIAL_EXPOSURE),
 }
+
+_CUSTOM_CHECKS: dict[str, tuple[Callable[[SecurityGroup], Sequence[dict[str, Any]]], str]] = {}
+
+
+def _sort_rules() -> None:
+    items = sorted(RULES.items())
+    RULES.clear()
+    RULES.update(items)
+
+
+def register_port_rule(
+    rule_id: str,
+    port: int,
+    service: str,
+    family: str,
+    remediation: str,
+    *,
+    category: str | None = None,
+    title: str | None = None,
+    description: str | None = None,
+    cis: Sequence[dict[str, str]] = (),
+) -> RuleInfo:
+    """Add a "TCP ``port`` open to the world" rule. Raises ``ValueError`` on any invalid input."""
+    problems: list[str] = []
+    if not isinstance(rule_id, str) or not _RULE_ID.match(rule_id):
+        problems.append("id must look like SG-016 or ACME-001")
+    elif rule_id in RULES:
+        problems.append(f"id {rule_id} is already registered")
+    if isinstance(port, bool) or not isinstance(port, int) or not 1 <= port <= 65535:
+        problems.append("port must be an integer from 1 to 65535")
+    elif any(existing == port for existing, _ in SENSITIVE_PORTS.values()):
+        problems.append(f"port {port} already has a rule")
+    if family not in _PORT_FAMILIES:
+        problems.append(f"family must be one of {', '.join(_PORT_FAMILIES)}")
+    if not isinstance(service, str) or not service.strip() or len(service) > 60:
+        problems.append("service must be a short string")
+    if not isinstance(remediation, str) or not remediation.strip() or len(remediation) > 800:
+        problems.append("remediation must be a non-empty string (at most 800 characters)")
+    cat = category or (POTENTIAL_EXPOSURE if family == "database" else RISKY_RULE)
+    if cat not in _CATEGORIES:
+        problems.append(f"category must be one of {', '.join(_CATEGORIES)}")
+    if problems:
+        raise ValueError(f"Invalid rule {rule_id!r}: " + "; ".join(problems))
+
+    info = RuleInfo(
+        rule_id,
+        title or f"{service} ({port}) open to the internet",
+        cat,
+        description or f"An ingress rule allows TCP port {port} from 0.0.0.0/0.",
+        remediation,
+        _COMMON_LIMITATION,
+        family=family,
+        cis=tuple(dict(entry) for entry in cis),
+    )
+    RULES[rule_id] = info
+    SENSITIVE_PORTS[rule_id] = (port, service)
+    RULE_FAMILY[rule_id] = family
+    (DATABASE_RULE_IDS if family == "database" else ADMIN_RULE_IDS).add(rule_id)
+    _sort_rules()
+    return info
+
+
+def register_check(info: RuleInfo, family: str):
+    """Decorator: add a custom per-security-group check (see the module docstring)."""
+
+    def decorator(check: Callable[[SecurityGroup], Sequence[dict[str, Any]]]):
+        if not _RULE_ID.match(info.id) or info.id in RULES:
+            raise ValueError(f"Invalid or duplicate rule id {info.id!r}")
+        if family not in ("admin", "database", "remote", "all_ports", "egress"):
+            raise ValueError(f"Unknown severity family {family!r}")
+        if info.category not in _CATEGORIES:
+            raise ValueError(f"category must be one of {', '.join(_CATEGORIES)}")
+        RULES[info.id] = RuleInfo(
+            info.id,
+            info.title,
+            info.category,
+            info.description,
+            info.remediation,
+            info.limitations or _COMMON_LIMITATION,
+            family=family,
+            cis=info.cis,
+        )
+        _CUSTOM_CHECKS[info.id] = (check, family)
+        _sort_rules()
+        return check
+
+    return decorator
+
+
+def load_rule_file(path: str | os.PathLike[str]) -> list[str]:
+    """Register every ``port_rules`` entry of a JSON file. Returns the ids added.
+
+    All entries are validated before any is registered, so a bad file changes nothing.
+    """
+    try:
+        data = json.loads(Path(path).read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        raise ValueError(f"Cannot read rule file {path}: {exc}") from exc
+    entries = data.get("port_rules") if isinstance(data, dict) else None
+    if not isinstance(entries, list):
+        raise ValueError(f"Rule file {path} must contain a 'port_rules' list.")
+
+    snapshot = (
+        dict(RULES),
+        dict(SENSITIVE_PORTS),
+        dict(RULE_FAMILY),
+        set(ADMIN_RULE_IDS),
+        set(DATABASE_RULE_IDS),
+    )
+    added: list[str] = []
+    try:
+        for entry in entries:
+            if not isinstance(entry, dict):
+                raise ValueError("every port rule must be an object")
+            register_port_rule(
+                entry.get("id"),
+                entry.get("port"),
+                entry.get("service"),
+                entry.get("family"),
+                entry.get("remediation"),
+                category=entry.get("category"),
+                title=entry.get("title"),
+                description=entry.get("description"),
+                cis=entry.get("cis") or (),
+            )
+            added.append(entry["id"])
+    except ValueError:
+        (
+            RULES.clear(),
+            SENSITIVE_PORTS.clear(),
+            RULE_FAMILY.clear(),
+            ADMIN_RULE_IDS.clear(),
+            DATABASE_RULE_IDS.clear(),
+        )
+        RULES.update(snapshot[0])
+        SENSITIVE_PORTS.update(snapshot[1])
+        RULE_FAMILY.update(snapshot[2])
+        ADMIN_RULE_IDS.update(snapshot[3])
+        DATABASE_RULE_IDS.update(snapshot[4])
+        raise
+    return added
+
+
+# Built-in port rules (data), then optional extra rules from the environment.
+load_rule_file(Path(__file__).with_name("rule_catalog.json"))
+if os.environ.get(RULES_FILE_ENV):
+    load_rule_file(os.environ[RULES_FILE_ENV])
+
+
+def rule_evidence(direction: str, index: int, rule: SecurityGroupRule) -> dict[str, Any]:
+    """Evidence entry for a custom check (same shape the built-in rules use)."""
+    return _rule_evidence(direction, index, rule)
 
 
 @dataclass(frozen=True)
@@ -466,6 +560,13 @@ def _evaluate_group(sg: SecurityGroup, context: dict[str, Any]) -> list[Finding]
                 {"port": port, "service": service},
             )
         )
+
+    for rule_id, (check, family) in _CUSTOM_CHECKS.items():
+        matches = list(check(sg) or [])
+        if matches:
+            findings.append(
+                _make_finding(rule_id, family, sg, context, matches, f"{label}: {RULES[rule_id].title}.")
+            )
 
     egress = _world_matches("egress", sg.egress, _is_all_traffic)
     if egress:
