@@ -341,3 +341,43 @@ def test_get_provider_selects_by_setting(settings):
     provider = providers_module.get_provider()
     assert provider.name == "meta" and provider.model == "muse-x"
     assert providers_module.provider_status()["is_meta_model"] is True
+
+
+# ---- answer cache: keyed by the question, not by the finding row -------------------------------
+
+
+def test_reanalysis_keeps_a_valid_cached_answer(client, snapshot_id, use_provider):
+    provider = use_provider(FakeProvider([json.dumps(valid_answer())]))
+    first_id = finding_id("SG-003", snapshot_id)
+    first = client.post(f"/api/findings/{first_id}/explain/", {}, format="json").json()["interaction"]
+    assert first["cached"] is False
+
+    # Re-analysing replaces the finding rows, but the question (same configuration) is unchanged.
+    assert client.post(f"/api/snapshots/{snapshot_id}/analyze/").status_code == 200
+    second_id = finding_id("SG-003", snapshot_id)
+    assert second_id != first_id
+    second = client.post(f"/api/findings/{second_id}/explain/", {}, format="json").json()["interaction"]
+
+    assert second["cached"] is True
+    assert len(provider.calls) == 1  # the model was not called again
+    assert AIInteraction.objects.filter(finding_id=second_id).count() == 1
+
+
+def test_a_new_prompt_version_invalidates_the_cache(client, snapshot_id, use_provider, monkeypatch):
+    provider = use_provider(FakeProvider([json.dumps(valid_answer()), json.dumps(valid_answer())]))
+    fid = finding_id("SG-003", snapshot_id)
+    client.post(f"/api/findings/{fid}/explain/", {}, format="json")
+    monkeypatch.setattr(explain_module, "PROMPT_VERSION", "99")
+    again = client.post(f"/api/findings/{fid}/explain/", {}, format="json").json()["interaction"]
+    assert again["cached"] is False
+    assert len(provider.calls) == 2
+
+
+def test_cache_key_depends_on_the_configuration_content(snapshot_id):
+    finding = SecurityFinding.objects.get(snapshot_id=snapshot_id, rule_id="SG-003")
+    provider = FakeProvider([])
+    payload = {"finding": {"rule_id": finding.rule_id}, "context": "a"}
+    same = explain_module.cache_key_for(dict(payload), provider)
+    other = explain_module.cache_key_for({**payload, "context": "b"}, provider)
+    assert same == explain_module.cache_key_for(dict(payload), provider)
+    assert same != other

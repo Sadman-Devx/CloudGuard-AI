@@ -66,3 +66,28 @@ export const runSimulation = (snapshotId, { interactionId, proposedChange, findi
       ? { interaction_id: interactionId }
       : { proposed_change: proposedChange, finding_id: findingId },
   });
+
+// ---- Attack paths (built from an imported snapshot; nothing touches a cloud account)
+const attackBase = (snapshotId) => `/api/snapshots/${snapshotId}/attack-path`;
+
+export const getAttackGraph = (snapshotId, signal) =>
+  apiRequest(`${attackBase(snapshotId)}/graph/`, { signal });
+
+export const getAttackPaths = (snapshotId, { topK = 10, maxDepth = 6 } = {}, signal) =>
+  apiRequest(
+    `${attackBase(snapshotId)}/paths/?top_k=${topK}&max_depth=${maxDepth}`,
+    { signal },
+  );
+
+export const getBlastRadius = (snapshotId, nodeId, signal) =>
+  apiRequest(
+    `${attackBase(snapshotId)}/blast-radius/${encodeURIComponent(nodeId)}/`,
+    { signal },
+  );
+
+export const simulateAttackFix = (snapshotId, body) =>
+  apiRequest(`${attackBase(snapshotId)}/simulate/`, { method: "POST", body });
+
+// ---- Findings grouped by the instance they affect
+export const getFindingsByInstance = (snapshotId, signal) =>
+  apiRequest(`/api/snapshots/${snapshotId}/findings/by-instance/`, { signal });

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import re
@@ -124,6 +125,42 @@ def _check_budget(provider_name: str) -> None:
         raise AIBudgetExceeded()
 
 
+def cache_key_for(payload: dict, provider) -> str:
+    """Stable key of one question: prompt version + provider + model + the exact finding payload.
+
+    The payload already contains the configuration context the model sees, so a changed snapshot,
+    a changed rule or a bumped ``PROMPT_VERSION`` all give a different key and never reuse a stale
+    answer.
+    """
+    blob = json.dumps(
+        {"prompt": PROMPT_VERSION, "provider": provider.name, "model": provider.model or "", "data": payload},
+        sort_keys=True,
+        default=str,
+    )
+    return hashlib.sha256(blob.encode("utf-8")).hexdigest()
+
+
+def _reuse(finding: SecurityFinding, hit: AIInteraction, key: str) -> AIInteraction:
+    """The answer for ``finding``: the hit itself, or a zero-cost copy attached to this finding."""
+    if hit.finding_id == finding.id:
+        return hit
+    return AIInteraction.objects.create(
+        project=finding.snapshot.project,
+        finding=finding,
+        provider=hit.provider,
+        model_id=hit.model_id,
+        source=hit.source,
+        status=AIInteraction.Status.OK,
+        prompt_version=hit.prompt_version,
+        response_json=hit.response_json,
+        fallback_reason="",
+        attempts=0,  # no model call was made, so it does not count against the hourly budget
+        latency_ms=0,
+        usage={},
+        cache_key=key,
+    )
+
+
 def explain_finding(finding: SecurityFinding, *, refresh: bool = False) -> tuple[AIInteraction, bool]:
     """Return ``(interaction, cached)``. Reuses a previous valid answer unless ``refresh``."""
     provider = get_provider()
@@ -156,6 +193,16 @@ def explain_finding(finding: SecurityFinding, *, refresh: bool = False) -> tuple
         "evidence": finding.evidence,
     }
     payload = build_payload(finding_dict, config, subnet_public)
+
+    cache_key = cache_key_for(payload, provider)
+    if not refresh:
+        hit = (
+            AIInteraction.objects.filter(cache_key=cache_key, status=AIInteraction.Status.OK)
+            .order_by("-id")
+            .first()
+        )
+        if hit is not None:
+            return _reuse(finding, hit, cache_key), True
 
     _check_budget(provider.name)
 
@@ -224,5 +271,6 @@ def explain_finding(finding: SecurityFinding, *, refresh: bool = False) -> tuple
         attempts=attempts,
         latency_ms=elapsed,
         usage=usage,
+        cache_key=cache_key,
     )
     return interaction, False

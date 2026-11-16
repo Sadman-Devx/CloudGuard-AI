@@ -13,6 +13,7 @@ from domain.network.scoring import compute_score_from_summary
 from .models import SecurityFinding
 from .serializers import AnalysisSerializer, FindingSerializer
 from .services.analysis import SnapshotIncompatible, analyze_snapshot
+from .services.grouping import group_by_instance
 
 
 def _score(analysis):
@@ -32,7 +33,7 @@ def _payload(snapshot, analysis, findings):
 
 
 class SnapshotAnalyzeView(APIView):
-    """Run the deterministic rules (SG-001..SG-006). Safe to repeat; replaces earlier results."""
+    """Run the deterministic security-group rules. Safe to repeat; replaces earlier results."""
 
     @extend_schema(request=None, responses={200: dict}, tags=["security"])
     def post(self, request, pk):
@@ -70,6 +71,24 @@ class SnapshotFindingsView(APIView):
         return Response(_payload(snapshot, analysis, findings))
 
 
+class SnapshotFindingsByInstanceView(APIView):
+    """The same findings, grouped by the instance they affect (worst first)."""
+
+    @extend_schema(responses={200: dict}, tags=["security"])
+    def get(self, request, pk):
+        snapshot = get_object_or_404(ConfigurationSnapshot, pk=pk)
+        analysis = getattr(snapshot, "analysis", None)
+        findings = FindingSerializer(snapshot.findings.all(), many=True).data
+        return Response(
+            {
+                "snapshot": snapshot.id,
+                "analysis": AnalysisSerializer(analysis).data if analysis else None,
+                "score": _score(analysis),
+                **group_by_instance(findings),
+            }
+        )
+
+
 class FindingDetailView(generics.RetrieveAPIView):
     queryset = SecurityFinding.objects.all()
     serializer_class = FindingSerializer
@@ -90,6 +109,8 @@ class RuleCatalogView(APIView):
                         "description": r.description,
                         "remediation": r.remediation,
                         "limitations": r.limitations,
+                        "family": r.family,
+                        "cis": list(r.cis),
                     }
                     for r in RULES.values()
                 ]

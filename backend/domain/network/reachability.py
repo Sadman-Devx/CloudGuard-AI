@@ -166,16 +166,18 @@ class PathResult:
 
 
 @lru_cache(maxsize=1024)
-def _network(cidr: str) -> ipaddress.IPv4Network:
-    return ipaddress.IPv4Network(cidr, strict=False)
+def _network(cidr: str) -> ipaddress.IPv4Network | ipaddress.IPv6Network:
+    # Only security-group and ACL entries may be IPv6 (see schema); routes and addresses are IPv4.
+    return ipaddress.ip_network(cidr, strict=False)
 
 
 def _cidr_has(cidr: str, ip: ipaddress.IPv4Address | None) -> bool:
     """Does ``cidr`` cover ``ip``? ``None`` is the anonymous client: only 0.0.0.0/0 covers it."""
     network = _network(cidr)
     if ip is None:
-        return network.prefixlen == 0
-    return ip in network
+        # The anonymous client is IPv4 only here, so an IPv6 entry such as ::/0 never matches it.
+        return network.version == 4 and network.prefixlen == 0
+    return ip in network  # an IPv4 address is never inside an IPv6 network
 
 
 def _port_text(protocol: str, port: int | None) -> str:

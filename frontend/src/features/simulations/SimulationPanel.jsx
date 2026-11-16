@@ -9,6 +9,10 @@ const OUTCOMES = {
     label: "Improves security",
     cls: "bg-emerald-100 text-emerald-900",
   },
+  fixes_connectivity: {
+    label: "Fixes connectivity",
+    cls: "bg-emerald-100 text-emerald-900",
+  },
   no_effect: { label: "No effect", cls: "bg-slate-200 text-slate-800" },
   introduces_new_risk: {
     label: "Introduces new risk",

@@ -1,9 +1,15 @@
 import { useState } from "react";
 
-import { analyzeSnapshot, getFindings, listRules } from "../api/endpoints.js";
+import {
+  analyzeSnapshot,
+  getFindings,
+  getFindingsByInstance,
+  listRules,
+} from "../api/endpoints.js";
 import Notice from "../components/Notice.jsx";
 import FindingDetail from "../features/findings/FindingDetail.jsx";
 import FindingsTable from "../features/findings/FindingsTable.jsx";
+import InstanceGroups from "../features/findings/InstanceGroups.jsx";
 import { SEVERITIES } from "../features/findings/severity.js";
 import SeverityBadge from "../features/findings/SeverityBadge.jsx";
 import ScoreGauge from "../features/score/ScoreGauge.jsx";
@@ -24,6 +30,7 @@ export default function FindingsPage({ focus = null }) {
   const [fresh, setFresh] = useState(null); // { snapshotId, data } after "Run analysis"
   const [running, setRunning] = useState(false);
   const [runError, setRunError] = useState(null);
+  const [view, setView] = useState("finding"); // "finding" | "instance"
 
   const stored = useAsyncData(snapshotId, (signal) =>
     getFindings(snapshotId, signal),
@@ -31,6 +38,13 @@ export default function FindingsPage({ focus = null }) {
   const rules = useAsyncData("rules", listRules);
 
   const data = fresh?.snapshotId === snapshotId ? fresh.data : stored.data;
+  // Only fetched when the "By instance" view is open; re-fetched after a new analysis run.
+  const byInstance = useAsyncData(
+    view === "instance" && data?.analysis
+      ? `${snapshotId}:${data.analysis.ran_at}`
+      : null,
+    (signal) => getFindingsByInstance(snapshotId, signal),
+  );
   const results = data?.results ?? [];
   const visible =
     severityFilter === "all"
@@ -250,9 +264,49 @@ export default function FindingsPage({ focus = null }) {
                   ))}
                 </select>
               </label>
+              <div
+                role="group"
+                aria-label="Findings view"
+                className="ml-3 inline-flex overflow-hidden rounded-lg border border-slate-300 align-bottom text-sm"
+              >
+                {[
+                  ["finding", "By finding"],
+                  ["instance", "By instance"],
+                ].map(([id, label]) => (
+                  <button
+                    key={id}
+                    type="button"
+                    aria-pressed={view === id}
+                    onClick={() => setView(id)}
+                    className={`px-3 py-1.5 ${
+                      view === id
+                        ? "bg-slate-900 text-white"
+                        : "bg-white text-slate-700 hover:bg-slate-50"
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
               <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
                 <div>
-                  {visible.length === 0 ? (
+                  {view === "instance" ? (
+                    byInstance.error ? (
+                      <Notice tone="error" title="Could not group the findings">
+                        {byInstance.error.message}
+                      </Notice>
+                    ) : byInstance.data ? (
+                      <InstanceGroups
+                        data={byInstance.data}
+                        selectedId={selectedId}
+                        onSelect={setSelectedId}
+                      />
+                    ) : (
+                      <p role="status" className="text-sm text-slate-500">
+                        Grouping findings by instance…
+                      </p>
+                    )
+                  ) : visible.length === 0 ? (
                     <p className="text-sm text-slate-500">
                       No findings with this severity.
                     </p>

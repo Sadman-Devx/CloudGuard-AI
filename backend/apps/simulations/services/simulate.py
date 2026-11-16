@@ -15,7 +15,7 @@ from apps.ai_copilot.models import AIInteraction
 from apps.cloud_resources.models import ConfigurationSnapshot
 from apps.cloud_resources.services.topology import SnapshotIncompatible
 from apps.security_engine.models import SecurityFinding
-from domain.network.proposals import ProposalError, validate_change
+from domain.network.proposals import ACTIONS, ALL_ACTIONS, ProposalError, validate_change
 from domain.network.reachability import QueryError, evaluate_path, validate_query
 from domain.network.schema import ConfigValidationError, NetworkConfig, parse_config
 from domain.network.simulation import SIMULATION_VERSION, SimulationError, parse_required_paths, simulate
@@ -99,7 +99,9 @@ def run_simulation(
         expected_group = raw_group if isinstance(raw_group, str) else ""
 
     try:
-        change = validate_change(proposed_change, config, expected_group)
+        # The model may only propose the findings-fixing actions; a person may simulate any of them.
+        allowed = ACTIONS if interaction is not None else ALL_ACTIONS
+        change = validate_change(proposed_change, config, expected_group, allowed=allowed)
     except ProposalError as exc:
         raise SimulationInputError({"proposed_change": exc.errors}) from exc
 

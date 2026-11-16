@@ -1,0 +1,179 @@
+{
+  "_comment": "Port rules of the security-group engine. Add your own with CLOUDGUARD_RULES_FILE (same shape). family: admin | database | remote. cis lists verified CIS mappings only; empty means no direct CIS control.",
+  "version": "1.1",
+  "port_rules": [
+    {
+      "id": "SG-001",
+      "port": 22,
+      "service": "SSH",
+      "family": "admin",
+      "category": "risky_rule",
+      "title": "SSH (22) open to the internet",
+      "description": "An ingress rule allows TCP port 22 from 0.0.0.0/0.",
+      "remediation": "Remove the 0.0.0.0/0 source. Allow SSH only from a trusted CIDR (office/VPN) or a bastion security group, or use AWS Systems Manager Session Manager instead of open SSH.",
+      "cis": [
+        {
+          "benchmark": "CIS AWS Foundations Benchmark",
+          "version": "3.0.0",
+          "control": "5.2",
+          "applies_to": "0.0.0.0/0",
+          "title": "Ensure no security groups allow ingress from 0.0.0.0/0 to remote server administration ports"
+        },
+        {
+          "benchmark": "CIS AWS Foundations Benchmark",
+          "version": "3.0.0",
+          "control": "5.3",
+          "applies_to": "::/0",
+          "title": "Ensure no security groups allow ingress from ::/0 to remote server administration ports"
+        }
+      ]
+    },
+    {
+      "id": "SG-002",
+      "port": 3389,
+      "service": "RDP",
+      "family": "admin",
+      "category": "risky_rule",
+      "title": "RDP (3389) open to the internet",
+      "description": "An ingress rule allows TCP port 3389 from 0.0.0.0/0.",
+      "remediation": "Remove the 0.0.0.0/0 source. Allow RDP only from a trusted CIDR or a bastion security group, or use Session Manager / a VPN.",
+      "cis": [
+        {
+          "benchmark": "CIS AWS Foundations Benchmark",
+          "version": "3.0.0",
+          "control": "5.2",
+          "applies_to": "0.0.0.0/0",
+          "title": "Ensure no security groups allow ingress from 0.0.0.0/0 to remote server administration ports"
+        },
+        {
+          "benchmark": "CIS AWS Foundations Benchmark",
+          "version": "3.0.0",
+          "control": "5.3",
+          "applies_to": "::/0",
+          "title": "Ensure no security groups allow ingress from ::/0 to remote server administration ports"
+        }
+      ]
+    },
+    {
+      "id": "SG-003",
+      "port": 5432,
+      "service": "PostgreSQL",
+      "family": "database",
+      "category": "potential_exposure",
+      "title": "PostgreSQL (5432) open to the internet",
+      "description": "An ingress rule allows TCP port 5432 from 0.0.0.0/0.",
+      "remediation": "Replace the 0.0.0.0/0 source with the security group of the application tier that needs database access, and keep the database in a private subnet without a public IP.",
+      "cis": []
+    },
+    {
+      "id": "SG-004",
+      "port": 3306,
+      "service": "MySQL",
+      "family": "database",
+      "category": "potential_exposure",
+      "title": "MySQL (3306) open to the internet",
+      "description": "An ingress rule allows TCP port 3306 from 0.0.0.0/0.",
+      "remediation": "Replace the 0.0.0.0/0 source with the security group of the application tier that needs database access, and keep the database in a private subnet without a public IP.",
+      "cis": []
+    },
+    {
+      "id": "SG-007",
+      "port": 1433,
+      "service": "Microsoft SQL Server",
+      "family": "database",
+      "category": "potential_exposure",
+      "title": "Microsoft SQL Server (1433) open to the internet",
+      "description": "An ingress rule allows TCP port 1433 from 0.0.0.0/0.",
+      "remediation": "Replace the 0.0.0.0/0 source with the security group of the application tier that needs access, and keep the service in a private subnet without a public IP.",
+      "cis": []
+    },
+    {
+      "id": "SG-008",
+      "port": 27017,
+      "service": "MongoDB",
+      "family": "database",
+      "category": "potential_exposure",
+      "title": "MongoDB (27017) open to the internet",
+      "description": "An ingress rule allows TCP port 27017 from 0.0.0.0/0.",
+      "remediation": "Replace the 0.0.0.0/0 source with the security group of the application tier that needs access, and keep the service in a private subnet without a public IP.",
+      "cis": []
+    },
+    {
+      "id": "SG-009",
+      "port": 6379,
+      "service": "Redis",
+      "family": "database",
+      "category": "potential_exposure",
+      "title": "Redis (6379) open to the internet",
+      "description": "An ingress rule allows TCP port 6379 from 0.0.0.0/0.",
+      "remediation": "Replace the 0.0.0.0/0 source with the security group of the application tier that needs access, and keep the service in a private subnet without a public IP.",
+      "cis": []
+    },
+    {
+      "id": "SG-010",
+      "port": 9200,
+      "service": "Elasticsearch",
+      "family": "database",
+      "category": "potential_exposure",
+      "title": "Elasticsearch (9200) open to the internet",
+      "description": "An ingress rule allows TCP port 9200 from 0.0.0.0/0.",
+      "remediation": "Replace the 0.0.0.0/0 source with the security group of the application tier that needs access, and keep the service in a private subnet without a public IP.",
+      "cis": []
+    },
+    {
+      "id": "SG-011",
+      "port": 445,
+      "service": "SMB",
+      "family": "admin",
+      "category": "risky_rule",
+      "title": "SMB (445) open to the internet",
+      "description": "An ingress rule allows TCP port 445 from 0.0.0.0/0.",
+      "remediation": "Remove the 0.0.0.0/0 source. Allow the port only from a trusted CIDR (office/VPN) or a bastion security group, or use AWS Systems Manager Session Manager / a VPN instead.",
+      "cis": []
+    },
+    {
+      "id": "SG-012",
+      "port": 23,
+      "service": "Telnet",
+      "family": "admin",
+      "category": "risky_rule",
+      "title": "Telnet (23) open to the internet",
+      "description": "An ingress rule allows TCP port 23 from 0.0.0.0/0.",
+      "remediation": "Remove the 0.0.0.0/0 source. Allow the port only from a trusted CIDR (office/VPN) or a bastion security group, or use AWS Systems Manager Session Manager / a VPN instead.",
+      "cis": []
+    },
+    {
+      "id": "SG-013",
+      "port": 21,
+      "service": "FTP",
+      "family": "admin",
+      "category": "risky_rule",
+      "title": "FTP (21) open to the internet",
+      "description": "An ingress rule allows TCP port 21 from 0.0.0.0/0.",
+      "remediation": "Remove the 0.0.0.0/0 source. Allow the port only from a trusted CIDR (office/VPN) or a bastion security group, or use AWS Systems Manager Session Manager / a VPN instead.",
+      "cis": []
+    },
+    {
+      "id": "SG-014",
+      "port": 2375,
+      "service": "Docker API (unencrypted)",
+      "family": "remote",
+      "category": "risky_rule",
+      "title": "Docker API (unencrypted) (2375) open to the internet",
+      "description": "An ingress rule allows TCP port 2375 from 0.0.0.0/0.",
+      "remediation": "Remove the 0.0.0.0/0 source immediately and disable the unencrypted Docker TCP socket; an exposed Docker API is usually remote code execution. Use the local socket or TLS with client certificates from a trusted CIDR only.",
+      "cis": []
+    },
+    {
+      "id": "SG-015",
+      "port": 11211,
+      "service": "Memcached",
+      "family": "database",
+      "category": "potential_exposure",
+      "title": "Memcached (11211) open to the internet",
+      "description": "An ingress rule allows TCP port 11211 from 0.0.0.0/0.",
+      "remediation": "Replace the 0.0.0.0/0 source with the security group of the application tier that needs access, and keep the service in a private subnet without a public IP.",
+      "cis": []
+    }
+  ]
+}
