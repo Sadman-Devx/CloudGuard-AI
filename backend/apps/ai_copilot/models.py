@@ -17,7 +17,9 @@ class AIInteraction(models.Model):
         FALLBACK = "fallback", "Fallback"
 
     project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name="ai_interactions")
-    finding = models.ForeignKey(SecurityFinding, on_delete=models.CASCADE, related_name="ai_interactions")
+    finding = models.ForeignKey(
+        SecurityFinding, on_delete=models.SET_NULL, null=True, related_name="ai_interactions"
+    )
     provider = models.CharField(max_length=16)
     model_id = models.CharField(max_length=128, blank=True)
     source = models.CharField(max_length=32, choices=Source.choices)

@@ -79,7 +79,7 @@ def test_aws_cli_adds_before_it_removes_and_ends_with_a_rollback():
 def test_terraform_patch_shows_the_old_and_new_rule():
     text = build_export(simulation(MODS), "terraform")["content"]
     assert "-  egress {" in text and "+  egress {" in text
-    assert '+  security_groups = ["sg-db"]' in text
+    assert '+    security_groups = ["sg-db"]' in text
     assert 'cidr_blocks = ["0.0.0.0/0"]' in text
 
 
