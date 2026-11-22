@@ -2,12 +2,16 @@ import { useCallback, useEffect, useState } from "react";
 
 import {
   createProject,
+  importAws,
   importFixture,
+  importIac,
   listFixtures,
   listProjects,
   uploadConfig,
 } from "../api/endpoints.js";
 import Notice from "../components/Notice.jsx";
+import AwsImportForm from "../features/import/AwsImportForm.jsx";
+import IacImportForm from "../features/import/IacImportForm.jsx";
 import ImportForm from "../features/import/ImportForm.jsx";
 import SnapshotSummary from "../features/import/SnapshotSummary.jsx";
 import ValidationErrors from "../features/import/ValidationErrors.jsx";
@@ -22,6 +26,7 @@ export default function ImportPage({ onViewTopology }) {
   const [loadError, setLoadError] = useState(null);
   const [snapshot, setSnapshot] = useState(null);
   const [error, setError] = useState(null);
+  const [source, setSource] = useState("sample");
 
   useEffect(() => {
     const controller = new AbortController();
@@ -67,6 +72,10 @@ export default function ImportPage({ onViewTopology }) {
     setSnapshot(await run(() => importFixture(projectId, name)));
   const handleUpload = async (config, fileName) =>
     setSnapshot(await run(() => uploadConfig(projectId, config, fileName)));
+  const handleIac = async (body) =>
+    setSnapshot(await run(() => importIac(projectId, body)));
+  const handleAws = async (body) =>
+    setSnapshot(await run(() => importAws(projectId, body)));
 
   if (loading) {
     return (
@@ -94,7 +103,8 @@ export default function ImportPage({ onViewTopology }) {
         </h2>
         <p className="mt-1 text-sm text-slate-500">
           Configurations are validated and stored as immutable snapshots.
-          Nothing is sent to AWS.
+          Sample, JSON and infrastructure-as-code imports never contact AWS;
+          the optional live import only reads.
         </p>
 
         <div className="mt-5 space-y-6">
@@ -105,13 +115,54 @@ export default function ImportPage({ onViewTopology }) {
             onCreate={handleCreate}
             busy={busy}
           />
-          <ImportForm
-            fixtures={fixtures}
-            disabled={!projectId}
-            busy={busy}
-            onImportFixture={handleImportFixture}
-            onUploadFile={handleUpload}
-          />
+          <div
+            role="group"
+            aria-label="Import source"
+            className="inline-flex flex-wrap overflow-hidden rounded-lg border border-slate-300 text-sm"
+          >
+            {[
+              ["sample", "Sample or JSON"],
+              ["iac", "Terraform / CloudFormation"],
+              ["aws", "Live AWS"],
+            ].map(([id, label]) => (
+              <button
+                key={id}
+                type="button"
+                aria-pressed={source === id}
+                onClick={() => setSource(id)}
+                className={`px-3 py-1.5 ${
+                  source === id
+                    ? "bg-slate-900 text-white"
+                    : "bg-white text-slate-700 hover:bg-slate-50"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          {source === "sample" && (
+            <ImportForm
+              fixtures={fixtures}
+              disabled={!projectId}
+              busy={busy}
+              onImportFixture={handleImportFixture}
+              onUploadFile={handleUpload}
+            />
+          )}
+          {source === "iac" && (
+            <IacImportForm
+              disabled={!projectId}
+              busy={busy}
+              onImport={handleIac}
+            />
+          )}
+          {source === "aws" && (
+            <AwsImportForm
+              disabled={!projectId}
+              busy={busy}
+              onImport={handleAws}
+            />
+          )}
           {!projectId && (
             <p className="text-sm text-slate-500">
               Create or select a project to enable importing.

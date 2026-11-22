@@ -22,6 +22,7 @@ def import_snapshot(
     *,
     source_type: str = ConfigurationSnapshot.SourceType.UPLOAD,
     source_name: str = "",
+    extra_warnings: list[dict[str, str]] | None = None,
 ) -> ConfigurationSnapshot:
     """Validate ``data`` and persist it as the project's next snapshot version.
 
@@ -60,7 +61,8 @@ def import_snapshot(
             region=config.region,
             schema_version=config.schema_version,
             raw_json=data,
-            warnings=[issue.as_dict() for issue in result.warnings],
+            # importer notes first (what was dropped / assumed), then the validator's own warnings
+            warnings=[*(extra_warnings or []), *(issue.as_dict() for issue in result.warnings)],
             resource_counts=inventory.counts_by_type(),
             relationship_count=len(inventory.relationships),
         )

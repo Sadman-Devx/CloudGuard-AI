@@ -18,6 +18,9 @@ class ConfigurationSnapshot(models.Model):
     class SourceType(models.TextChoices):
         UPLOAD = "upload", "Upload"
         FIXTURE = "fixture", "Sample fixture"
+        AWS = "aws", "Live AWS (read-only)"
+        TERRAFORM = "terraform", "Terraform"
+        CLOUDFORMATION = "cloudformation", "CloudFormation"
 
     project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name="snapshots")
     version = models.PositiveIntegerField()

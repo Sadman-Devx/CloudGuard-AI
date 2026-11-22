@@ -13,6 +13,7 @@ from common.exceptions import ConfigValidationFailed
 
 from .models import Simulation
 from .serializers import SimulationListSerializer, SimulationRequestSerializer, SimulationSerializer
+from .services.export import FORMATS, ExportError, build_export
 from .services.simulate import SimulationInputError, SnapshotIncompatible, check_path, run_simulation
 
 
@@ -90,3 +91,21 @@ class SnapshotReachabilityView(APIView):
             raise ConfigValidationFailed(exc.errors) from exc
         except SimulationInputError as exc:
             raise ValidationError(exc.errors) from exc
+
+
+class SimulationExportView(APIView):
+    """Render a simulation as an AWS CLI script, a Terraform patch or a pull-request text.
+
+    The output is text for a person to review; CloudGuard never runs it.
+    """
+
+    @extend_schema(responses={200: dict}, tags=["simulation"])
+    def get(self, request, pk):
+        simulation = get_object_or_404(Simulation.objects.select_related("snapshot"), pk=pk)
+        fmt = request.query_params.get("format", "pr")
+        if fmt not in FORMATS:
+            raise ValidationError({"format": [f"Use one of: {', '.join(FORMATS)}."]})
+        try:
+            return Response(build_export(simulation, fmt))
+        except ExportError as exc:
+            raise ValidationError({"detail": [str(exc)]}) from exc

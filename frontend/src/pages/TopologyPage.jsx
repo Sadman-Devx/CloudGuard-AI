@@ -1,10 +1,16 @@
 import { useMemo, useState } from "react";
 
-import { getTopology, listProjects, listSnapshots } from "../api/endpoints.js";
+import {
+  getTopology,
+  getTopologyRisk,
+  listProjects,
+  listSnapshots,
+} from "../api/endpoints.js";
 import Notice from "../components/Notice.jsx";
 import DetailPanel from "../features/topology/DetailPanel.jsx";
 import Filters, { Legend } from "../features/topology/Filters.jsx";
 import TopologyGraph from "../features/topology/TopologyGraph.jsx";
+import RiskPanel from "../features/topology/RiskPanel.jsx";
 import { useAsyncData } from "../hooks/useAsyncData.js";
 
 function Stat({ label, value, tone = "default" }) {
@@ -27,6 +33,8 @@ export default function TopologyPage({ focus = null }) {
   const [chosenSnapshot, setChosenSnapshot] = useState(null);
   const [hiddenTypes, setHiddenTypes] = useState(() => new Set());
   const [selection, setSelection] = useState(null);
+  const [showRisk, setShowRisk] = useState(false);
+  const [activePathId, setActivePathId] = useState(null);
 
   const projects = useAsyncData("projects", listProjects);
   const projectId =
@@ -46,6 +54,11 @@ export default function TopologyPage({ focus = null }) {
 
   const topology = useAsyncData(snapshotId, (signal) =>
     getTopology(snapshotId, signal),
+  );
+
+  // Only fetched once the overlay is switched on.
+  const risk = useAsyncData(showRisk && snapshotId ? snapshotId : null, (signal) =>
+    getTopologyRisk(snapshotId, signal),
   );
 
   const toggleType = (type) =>
@@ -205,8 +218,35 @@ export default function TopologyPage({ focus = null }) {
 
           <div className="flex flex-wrap items-center justify-between gap-3">
             <Filters hiddenTypes={hiddenTypes} onToggle={toggleType} />
-            <Legend />
+            <div className="flex flex-wrap items-center gap-3">
+              <button
+                type="button"
+                aria-pressed={showRisk}
+                onClick={() => {
+                  setShowRisk((on) => !on);
+                  setActivePathId(null);
+                }}
+                className={`rounded-lg border px-3 py-1.5 text-sm font-medium ${
+                  showRisk
+                    ? "border-red-500 bg-red-50 text-red-800"
+                    : "border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
+                }`}
+              >
+                {showRisk ? "Hide risk overlay" : "Show risk overlay"}
+              </button>
+              <Legend />
+            </div>
           </div>
+          {showRisk && risk.error && (
+            <Notice tone="error" title="Could not compute the risk overlay">
+              {risk.error.message}
+            </Notice>
+          )}
+          {showRisk && risk.loading && (
+            <p role="status" className="text-sm text-slate-500">
+              Computing risky paths…
+            </p>
+          )}
 
           <div className="grid gap-4 xl:grid-cols-[1fr_300px]">
             <TopologyGraph
@@ -214,13 +254,26 @@ export default function TopologyPage({ focus = null }) {
               hiddenTypes={hiddenTypes}
               selection={selection}
               onSelect={setSelection}
+              risk={showRisk ? risk.data : null}
+              activePathId={activePathId}
             />
-            <DetailPanel
-              topology={topology.data}
-              selection={selection}
-              onSelect={setSelection}
-              onClear={() => setSelection(null)}
-            />
+            <div className="space-y-4">
+              {showRisk && risk.data && (
+                <RiskPanel
+                  risk={risk.data}
+                  names={names}
+                  selection={selection}
+                  activePathId={activePathId}
+                  onSelectPath={setActivePathId}
+                />
+              )}
+              <DetailPanel
+                topology={topology.data}
+                selection={selection}
+                onSelect={setSelection}
+                onClear={() => setSelection(null)}
+              />
+            </div>
           </div>
         </>
       )}

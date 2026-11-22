@@ -1,0 +1,81 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  Read-only role for CloudGuard AI's live import. It can describe network configuration and
+  nothing else: no write, no delete, no data access. Deploy it in the account you want to analyse.
+
+Parameters:
+  TrustedAccountId:
+    Type: String
+    AllowedPattern: '^\d{12}$'
+    Description: AWS account that runs the CloudGuard backend (the account allowed to assume this role).
+  ExternalId:
+    Type: String
+    MinLength: 8
+    NoEcho: true
+    Description: Shared secret the backend must present when it assumes the role (confused-deputy protection).
+  AllowS3PublicAccessChecks:
+    Type: String
+    Default: "false"
+    AllowedValues: ["true", "false"]
+    Description: Also allow reading bucket public-access settings (only needed for the optional S3 check).
+
+Conditions:
+  WithS3: !Equals [!Ref AllowS3PublicAccessChecks, "true"]
+
+Resources:
+  CloudGuardReadOnly:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: CloudGuardReadOnly
+      MaxSessionDuration: 3600
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              AWS: !Sub arn:aws:iam::${TrustedAccountId}:root
+            Action: sts:AssumeRole
+            Condition:
+              StringEquals:
+                sts:ExternalId: !Ref ExternalId
+      Policies:
+        - PolicyName: NetworkDescribeOnly
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Sid: Ec2Describe
+                Effect: Allow
+                Action:
+                  - ec2:DescribeVpcs
+                  - ec2:DescribeSubnets
+                  - ec2:DescribeInternetGateways
+                  - ec2:DescribeRouteTables
+                  - ec2:DescribeSecurityGroups
+                  - ec2:DescribeNetworkAcls
+                  - ec2:DescribeInstances
+                Resource: "*"
+              - Sid: RdsAndLoadBalancerDescribe
+                Effect: Allow
+                Action:
+                  - rds:DescribeDBInstances
+                  - elasticloadbalancing:DescribeLoadBalancers
+                  - elasticloadbalancing:DescribeListeners
+                Resource: "*"
+        - !If
+          - WithS3
+          - PolicyName: S3PublicAccessChecks
+            PolicyDocument:
+              Version: "2012-10-17"
+              Statement:
+                - Effect: Allow
+                  Action:
+                    - s3:ListAllMyBuckets
+                    - s3:GetBucketPublicAccessBlock
+                    - s3:GetBucketAcl
+                  Resource: "*"
+          - !Ref AWS::NoValue
+
+Outputs:
+  RoleArn:
+    Description: Give this ARN to CloudGuard (role to assume).
+    Value: !GetAtt CloudGuardReadOnly.Arn

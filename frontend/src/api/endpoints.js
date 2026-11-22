@@ -91,3 +91,36 @@ export const simulateAttackFix = (snapshotId, body) =>
 // ---- Findings grouped by the instance they affect
 export const getFindingsByInstance = (snapshotId, signal) =>
   apiRequest(`/api/snapshots/${snapshotId}/findings/by-instance/`, { signal });
+
+// ---- Import from infrastructure-as-code and from a live AWS account (read-only)
+export const importIac = (projectId, { format, content, name }) =>
+  apiRequest(`/api/projects/${projectId}/snapshots/from-iac/`, {
+    method: "POST",
+    body: { format, content, name },
+  });
+
+export const getAwsImportStatus = (signal) =>
+  apiRequest("/api/aws-import/status/", { signal });
+
+export const importAws = (projectId, body) =>
+  apiRequest(`/api/projects/${projectId}/snapshots/from-aws/`, {
+    method: "POST",
+    body,
+  });
+
+// ---- Topology risk overlay
+export const getTopologyRisk = (snapshotId, signal) =>
+  apiRequest(`/api/snapshots/${snapshotId}/topology/risk/`, { signal });
+
+// ---- Fix as code (text for a person to review; never executed)
+export const getSimulationExport = (simulationId, format) =>
+  apiRequest(`/api/simulations/${simulationId}/export/?format=${format}`);
+
+// ---- Dashboard
+export const getDashboard = (signal) => apiRequest("/api/dashboard/", { signal });
+
+export const getProjectDashboard = (projectId, signal) =>
+  apiRequest(`/api/projects/${projectId}/dashboard/`, { signal });
+
+export const refreshProjectDashboard = (projectId) =>
+  apiRequest(`/api/projects/${projectId}/dashboard/refresh/`, { method: "POST" });

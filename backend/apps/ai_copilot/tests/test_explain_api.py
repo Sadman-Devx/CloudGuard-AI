@@ -347,7 +347,7 @@ def test_get_provider_selects_by_setting(settings):
 
 
 def test_reanalysis_keeps_a_valid_cached_answer(client, snapshot_id, use_provider):
-    provider = use_provider(FakeProvider([json.dumps(valid_answer())]))
+    provider = use_provider(FakeProvider([valid_answer()]))
     first_id = finding_id("SG-003", snapshot_id)
     first = client.post(f"/api/findings/{first_id}/explain/", {}, format="json").json()["interaction"]
     assert first["cached"] is False
@@ -364,7 +364,7 @@ def test_reanalysis_keeps_a_valid_cached_answer(client, snapshot_id, use_provide
 
 
 def test_a_new_prompt_version_invalidates_the_cache(client, snapshot_id, use_provider, monkeypatch):
-    provider = use_provider(FakeProvider([json.dumps(valid_answer()), json.dumps(valid_answer())]))
+    provider = use_provider(FakeProvider([valid_answer(), valid_answer()]))
     fid = finding_id("SG-003", snapshot_id)
     client.post(f"/api/findings/{fid}/explain/", {}, format="json")
     monkeypatch.setattr(explain_module, "PROMPT_VERSION", "99")
