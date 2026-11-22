@@ -11,7 +11,7 @@ vi.mock("./features/topology/TopologyGraph.jsx", () => ({
 afterEach(() => vi.unstubAllGlobals());
 
 describe("App navigation", () => {
-  it("renders the four tabs and marks the active one", async () => {
+  it("renders the five tabs and marks the active one", async () => {
     mockFetch({
       "GET /api/health/": () => ({
         body: { status: "ok", service: "s", version: "1", database: "ok" },
@@ -23,6 +23,7 @@ describe("App navigation", () => {
     expect(nav).toHaveTextContent("Import");
     expect(nav).toHaveTextContent("Topology");
     expect(nav).toHaveTextContent("Findings");
+    expect(nav).toHaveTextContent("Attack paths");
     expect(
       screen.getByRole("link", { name: "Attack path explorer" }),
     ).toHaveAttribute("href", "/attack_path_explorer.html");

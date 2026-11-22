@@ -1,5 +1,6 @@
 import { useState } from "react";
 
+import AttackPathsPage from "./pages/AttackPathsPage.jsx";
 import FindingsPage from "./pages/FindingsPage.jsx";
 import ImportPage from "./pages/ImportPage.jsx";
 import StatusPage from "./pages/StatusPage.jsx";
@@ -10,6 +11,7 @@ const TABS = [
   { id: "import", label: "Import" },
   { id: "topology", label: "Topology" },
   { id: "findings", label: "Findings" },
+  { id: "attack", label: "Attack paths" },
 ];
 
 export default function App() {
@@ -66,6 +68,7 @@ export default function App() {
         {tab === "import" && <ImportPage onViewTopology={viewTopology} />}
         {tab === "topology" && <TopologyPage focus={focus} />}
         {tab === "findings" && <FindingsPage focus={focus} />}
+        {tab === "attack" && <AttackPathsPage focus={focus} />}
       </main>
     </div>
   );

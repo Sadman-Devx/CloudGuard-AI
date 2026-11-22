@@ -37,7 +37,7 @@ import ipaddress
 from dataclasses import dataclass
 from typing import Any
 
-from domain.network.proposals import ProposedChange, wide_cidr_warning
+from domain.network.proposals import EXTRA_ACTIONS, ProposedChange, wide_cidr_warning
 from domain.network.reachability import (
     ALLOWED,
     BLOCKED,
@@ -51,7 +51,7 @@ from domain.network.reachability import (
 )
 from domain.network.rules import SENSITIVE_PORTS, WORLD_CIDR, Finding, summarize
 from domain.network.rules import evaluate as evaluate_rules
-from domain.network.schema import NON_PUBLIC_RANGES, NetworkConfig, SecurityGroupRule
+from domain.network.schema import NON_PUBLIC_RANGES, NaclRule, NetworkConfig, SecurityGroupRule
 
 SIMULATION_VERSION = "1.0"
 
@@ -76,6 +76,7 @@ OUTCOME_INCONCLUSIVE = "inconclusive"
 OUTCOME_REQUIRED_UNMET = "required_connectivity_unmet"
 OUTCOME_NEW_RISK = "introduces_new_risk"
 OUTCOME_IMPROVES = "improves_security"
+OUTCOME_FIXES_CONNECTIVITY = "fixes_connectivity"
 OUTCOME_NO_EFFECT = "no_effect"
 
 _SENSITIVE_PROBES = tuple(sorted(port for port, _ in SENSITIVE_PORTS.values()))
@@ -134,6 +135,8 @@ def _broader_than_proposal(rule: SecurityGroupRule, change: ProposedChange) -> b
 
 def apply_change(config: NetworkConfig, change: ProposedChange) -> AppliedChange:
     """Return a modified *copy* of ``config``; ``config`` itself is never touched."""
+    if change.action in EXTRA_ACTIONS:
+        return _apply_extended(config, change)
     sg = next((g for g in config.security_groups if g.id == change.security_group_id), None)
     if sg is None:
         raise SimulationError([f"Security group {change.security_group_id} does not exist."])
@@ -192,6 +195,128 @@ def apply_change(config: NetworkConfig, change: ProposedChange) -> AppliedChange
     groups = tuple(modified_sg if g.id == sg.id else g for g in config.security_groups)
     return AppliedChange(
         dataclasses.replace(config, security_groups=groups), tuple(modifications), tuple(warnings)
+    )
+
+
+def _nacl_view(rule: NaclRule) -> dict[str, Any]:
+    return {
+        "rule_number": rule.rule_number,
+        "action": rule.action,
+        "protocol": rule.protocol,
+        "cidr": rule.cidr,
+        "from_port": rule.from_port,
+        "to_port": rule.to_port,
+    }
+
+
+def _apply_extended(config: NetworkConfig, change: ProposedChange) -> AppliedChange:
+    """The changes beyond "narrow an open ingress rule": egress, added rules and network ACLs."""
+    sg = next((g for g in config.security_groups if g.id == change.security_group_id), None)
+    if sg is None:
+        raise SimulationError([f"Security group {change.security_group_id} does not exist."])
+    modifications: list[dict[str, Any]] = []
+    warnings: list[dict[str, str]] = []
+    wide = wide_cidr_warning(change)
+    if wide:
+        warnings.append({"code": "WIDE_CIDR", "message": wide})
+
+    if change.action in ("restrict_egress_rule", "add_ingress_rule"):
+        replacement = SecurityGroupRule(
+            protocol=change.allow_protocol if change.action == "restrict_egress_rule" else change.protocol,
+            from_port=change.allow_from_port if change.action == "restrict_egress_rule" else change.from_port,
+            to_port=change.allow_to_port if change.action == "restrict_egress_rule" else change.to_port,
+            cidr=change.new_cidr,
+            peer_security_group_id=change.new_source_security_group_id,
+        )
+        if change.action == "add_ingress_rule":
+            if any(_rule_key(r) == _rule_key(replacement) for r in sg.ingress):
+                raise SimulationError(["An identical ingress rule already exists."])
+            modifications.append(
+                {
+                    "security_group": sg.id,
+                    "direction": "ingress",
+                    "index": len(sg.ingress),
+                    "before": None,
+                    "after": _rule_view(replacement),
+                    "note": "rule added",
+                }
+            )
+            modified = dataclasses.replace(sg, ingress=(*sg.ingress, replacement))
+        else:
+            targeted = [i for i, r in enumerate(sg.egress) if _is_targeted(r, change)]
+            if not targeted:
+                raise SimulationError(["No egress rule open to 0.0.0.0/0 matches the proposed change."])
+            untouched = {_rule_key(r) for i, r in enumerate(sg.egress) if i not in targeted}
+            placed = _rule_key(replacement) in untouched
+            new_egress: list[SecurityGroupRule] = []
+            for index, rule in enumerate(sg.egress):
+                if index not in targeted:
+                    new_egress.append(rule)
+                    continue
+                note = "covered by the replacement rule" if placed else None
+                if not placed:
+                    new_egress.append(replacement)
+                    placed = True
+                modifications.append(
+                    {
+                        "security_group": sg.id,
+                        "direction": "egress",
+                        "index": index,
+                        "before": _rule_view(rule),
+                        "after": _rule_view(replacement) if note is None else None,
+                        "note": note,
+                    }
+                )
+            modified = dataclasses.replace(sg, egress=tuple(new_egress))
+        groups = tuple(modified if g.id == sg.id else g for g in config.security_groups)
+        return AppliedChange(
+            dataclasses.replace(config, security_groups=groups), tuple(modifications), tuple(warnings)
+        )
+
+    acl = next((a for a in config.network_acls if a.id == change.acl_id), None)
+    if acl is None:
+        raise SimulationError([f"Network ACL {change.acl_id} does not exist."])
+    entries = acl.ingress if change.direction == "ingress" else acl.egress
+    if change.action == "remove_nacl_rule":
+        existing = next((e for e in entries if e.rule_number == change.rule_number), None)
+        if existing is None:
+            raise SimulationError([f"{acl.id} has no {change.direction} rule number {change.rule_number}."])
+        new_entries = tuple(e for e in entries if e.rule_number != change.rule_number)
+        before, after = _nacl_view(existing), None
+    else:
+        if any(e.rule_number == change.rule_number for e in entries):
+            raise SimulationError(
+                [f"{acl.id} already has a {change.direction} rule number {change.rule_number}."]
+            )
+        added = NaclRule(
+            rule_number=change.rule_number,
+            action="allow",
+            protocol=change.protocol,
+            cidr=change.new_cidr,
+            from_port=change.from_port,
+            to_port=change.to_port,
+        )
+        new_entries = (*entries, added)
+        before, after = None, _nacl_view(added)
+    modified_acl = (
+        dataclasses.replace(acl, ingress=new_entries)
+        if change.direction == "ingress"
+        else dataclasses.replace(acl, egress=new_entries)
+    )
+    modifications.append(
+        {
+            "security_group": sg.id,
+            "network_acl": acl.id,
+            "direction": change.direction,
+            "index": change.rule_number,
+            "before": before,
+            "after": after,
+            "note": None,
+        }
+    )
+    acls = tuple(modified_acl if a.id == acl.id else a for a in config.network_acls)
+    return AppliedChange(
+        dataclasses.replace(config, network_acls=acls), tuple(modifications), tuple(warnings)
     )
 
 
@@ -256,6 +381,8 @@ def _candidates(
     before (the proposal names its source group explicitly); a non-strict one is only required if
     it worked before (we are narrowing an existing allow-list, not asserting an intent).
     """
+    if change.action in EXTRA_ACTIONS:
+        return _extended_candidates(config, change)
     destinations = _group_members(config, change.security_group_id)
     probes = probe_ports(change)
     warnings: list[dict[str, str]] = []
@@ -291,6 +418,106 @@ def _candidates(
                 candidates.append((query, role))
                 if (source, ip) in inferred_sources:
                     inferred.append((query, strict))
+
+    if len(candidates) > MAX_CANDIDATE_PATHS:
+        keep = {q.key for q, _ in inferred}
+        trimmed = [c for c in candidates if c[0].key in keep]
+        trimmed += [c for c in candidates if c[0].key not in keep][
+            : max(0, MAX_CANDIDATE_PATHS - len(trimmed))
+        ]
+        candidates = trimmed
+        warnings.append(
+            {
+                "code": "PATHS_TRUNCATED",
+                "message": f"Only the first {MAX_CANDIDATE_PATHS} candidate paths were compared.",
+            }
+        )
+    return candidates, inferred, warnings
+
+
+def _extended_candidates(
+    config: NetworkConfig, change: ProposedChange
+) -> tuple[list[tuple[PathQuery, str]], list[tuple[PathQuery, bool]], list[dict[str, str]]]:
+    """Candidate and inferred-required paths for egress, added-rule and network-ACL changes.
+
+    Inferred paths are always *strict*: these changes state an intent ("this source/destination
+    must work"), so that path has to work after the change even if it did not before.
+    """
+    warnings: list[dict[str, str]] = []
+    members = _group_members(config, change.security_group_id)
+    everyone = [i.id for i in config.instances]
+    sensitive = tuple(("tcp", p) for p in _SENSITIVE_PROBES)
+
+    def ports(protocol: str | None, low: int | None, high: int | None) -> tuple[tuple[str, int], ...]:
+        if protocol in MODELLED_PROTOCOLS and low is not None and high is not None:
+            return tuple((protocol, p) for p in sorted({low, high}))
+        return sensitive
+
+    candidates: list[tuple[PathQuery, str]] = []
+    inferred: list[tuple[PathQuery, bool]] = []
+
+    def add(source: str, ip: str | None, destination: str, probes, required) -> None:
+        for protocol, port in probes:
+            if source == destination:
+                continue
+            query = PathQuery(source, destination, protocol, port, ip)
+            candidates.append((query, ROLE_EXPOSURE if source == INTERNET and ip is None else ROLE_OTHER))
+            if required(protocol, port):
+                inferred.append((query, True))
+
+    def inside(cidr: str | None) -> set[str]:
+        if not cidr:
+            return set()
+        network = ipaddress.ip_network(cidr, strict=False)
+        return {i.id for i in config.instances if ipaddress.ip_address(i.private_ip) in network}
+
+    def host_of(cidr: str | None) -> str | None:
+        return _trusted_host(ipaddress.ip_network(cidr, strict=False)) if cidr else None
+
+    never = lambda _p, _n: False  # noqa: E731
+
+    if change.action == "restrict_egress_rule":
+        allowed = ports(change.allow_protocol, change.allow_from_port, change.allow_to_port)
+        probes = allowed + (sensitive if change.protocol == "-1" else ())
+        wanted = set(_group_members(config, change.new_source_security_group_id or "")) | inside(
+            change.new_cidr
+        )
+        for src in members:
+            for dst in everyone:
+                if dst not in members:
+                    add(src, None, dst, probes, lambda p, n, d=dst: d in wanted and (p, n) in allowed)
+    elif change.action == "add_ingress_rule":
+        probes = ports(change.protocol, change.from_port, change.to_port)
+        trusted_ids = set(_group_members(config, change.new_source_security_group_id or "")) | inside(
+            change.new_cidr
+        )
+        host = host_of(change.new_cidr)
+        for dst in members:
+            add(INTERNET, None, dst, probes, never)
+            if host is not None:
+                add(INTERNET, host, dst, probes, lambda _p, _n: True)
+            for src in everyone:
+                add(src, None, dst, probes, lambda _p, _n, s=src: s in trusted_ids)
+    else:  # network ACL changes
+        acl = next((a for a in config.network_acls if a.id == change.acl_id), None)
+        in_acl = [i.id for i in config.instances if acl is not None and i.subnet_id in acl.subnet_ids]
+        probes = ports(change.protocol, change.from_port, change.to_port)
+        adding = change.action == "add_nacl_allow_rule"
+        trusted_ids = inside(change.new_cidr) if adding else set()
+        host = host_of(change.new_cidr) if adding else None
+        if change.direction == "ingress":
+            for dst in in_acl:
+                add(INTERNET, None, dst, probes, never)
+                if host is not None:
+                    add(INTERNET, host, dst, probes, lambda _p, _n: True)
+                for src in everyone:
+                    if src not in in_acl:
+                        add(src, None, dst, probes, lambda _p, _n, s=src: s in trusted_ids)
+        else:
+            for src in in_acl:
+                for dst in everyone:
+                    if dst not in in_acl:
+                        add(src, None, dst, probes, lambda _p, _n, d=dst: d in trusted_ids)
 
     if len(candidates) > MAX_CANDIDATE_PATHS:
         keep = {q.key for q, _ in inferred}
@@ -465,11 +692,15 @@ def simulate(
         outcome = OUTCOME_NEW_RISK
     elif resolved or exposure_closed:
         outcome = OUTCOME_IMPROVES
+    elif change.action in EXTRA_ACTIONS and any(
+        c["required"] and c["change"] == NEWLY_ALLOWED for c in connectivity
+    ):
+        outcome = OUTCOME_FIXES_CONNECTIVITY
     else:
         outcome = OUTCOME_NO_EFFECT
 
     required_verified = bool(req) and all(c["after"] == ALLOWED for c in req)
-    recommended = outcome == OUTCOME_IMPROVES and required_verified
+    recommended = outcome in (OUTCOME_IMPROVES, OUTCOME_FIXES_CONNECTIVITY) and required_verified
 
     if not req:
         warnings.append(
@@ -519,6 +750,8 @@ def simulate(
             lines.append(f"Internet exposure {c['label']}: {c['before']} -> {c['after']}.")
         elif c["change"] == LOST:
             lines.append(f"Also removes access: {c['label']}.")
+        elif c["change"] == NEWLY_ALLOWED and change.action in EXTRA_ACTIONS:
+            lines.append(f"Also opens access: {c['label']}.")
 
     def snapshot(paths: dict[str, PathResult], found: list[Finding]) -> dict[str, Any]:
         return {
