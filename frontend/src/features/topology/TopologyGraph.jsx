@@ -9,9 +9,10 @@ import "@xyflow/react/dist/style.css";
 import { useMemo } from "react";
 
 import { filterTopology, graphHeight, layoutTopology } from "./layout.js";
+import { decorateEdges, decorateNodes } from "./riskOverlay.js";
 import { nodeTypes } from "./nodeTypes.js";
 
-function Graph({ topology, hiddenTypes, selection, onSelect }) {
+function Graph({ topology, hiddenTypes, selection, onSelect, risk, activePathId }) {
   const { nodes, edges } = useMemo(
     () => layoutTopology(filterTopology(topology, hiddenTypes)),
     [topology, hiddenTypes],
@@ -19,19 +20,19 @@ function Graph({ topology, hiddenTypes, selection, onSelect }) {
 
   const shownNodes = useMemo(
     () =>
-      nodes.map((n) => ({
+      decorateNodes(nodes, risk, activePathId).map((n) => ({
         ...n,
         selected: selection?.kind === "node" && selection.id === n.id,
       })),
-    [nodes, selection],
+    [nodes, selection, risk, activePathId],
   );
   const shownEdges = useMemo(
     () =>
-      edges.map((e) => ({
+      decorateEdges(edges, risk, activePathId).map((e) => ({
         ...e,
         selected: selection?.kind === "edge" && selection.id === e.id,
       })),
-    [edges, selection],
+    [edges, selection, risk, activePathId],
   );
 
   return (

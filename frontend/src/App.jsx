@@ -1,6 +1,7 @@
 import { useState } from "react";
 
 import AttackPathsPage from "./pages/AttackPathsPage.jsx";
+import DashboardPage from "./pages/DashboardPage.jsx";
 import FindingsPage from "./pages/FindingsPage.jsx";
 import ImportPage from "./pages/ImportPage.jsx";
 import StatusPage from "./pages/StatusPage.jsx";
@@ -12,6 +13,7 @@ const TABS = [
   { id: "topology", label: "Topology" },
   { id: "findings", label: "Findings" },
   { id: "attack", label: "Attack paths" },
+  { id: "dashboard", label: "Dashboard" },
 ];
 
 export default function App() {
@@ -69,6 +71,7 @@ export default function App() {
         {tab === "topology" && <TopologyPage focus={focus} />}
         {tab === "findings" && <FindingsPage focus={focus} />}
         {tab === "attack" && <AttackPathsPage focus={focus} />}
+        {tab === "dashboard" && <DashboardPage />}
       </main>
     </div>
   );

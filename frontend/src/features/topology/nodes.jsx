@@ -67,18 +67,36 @@ function Handles() {
   );
 }
 
+const RISK_RING = {
+  critical: "border-red-600 ring-2 ring-red-500",
+  high: "border-red-500 ring-2 ring-red-400",
+  medium: "border-amber-500 ring-2 ring-amber-400",
+  low: "border-sky-400 ring-1 ring-sky-300",
+  info: "border-slate-300",
+};
+
 export function ResourceNode({ data: node, selected }) {
   const sub = subtitle(node);
+  const risk = node.risk;
+  const ring = selected
+    ? "border-indigo-500 ring-2 ring-indigo-300"
+    : risk
+      ? (RISK_RING[risk.severity] ?? "border-slate-200")
+      : node.onRiskPath
+        ? "border-red-400 ring-1 ring-red-300"
+        : "border-slate-200";
   return (
     <div
       aria-label={`${TYPE_LABELS[node.type]} ${node.label}`}
+      data-risk={risk?.severity}
       style={{ width: NODE_W, height: NODE_H }}
-      className={`rounded-lg border border-l-4 bg-white px-3 py-1.5 shadow-sm ${ACCENT[node.type] ?? ""} ${
-        selected
-          ? "border-indigo-500 ring-2 ring-indigo-300"
-          : "border-slate-200"
-      }`}
+      className={`relative rounded-lg border border-l-4 bg-white px-3 py-1.5 shadow-sm ${ACCENT[node.type] ?? ""} ${ring}`}
     >
+      {risk && (
+        <span className="absolute -right-2 -top-2 rounded-full bg-red-600 px-1.5 text-[10px] font-bold text-white">
+          {risk.count}
+        </span>
+      )}
       <Handles />
       <div className="flex items-center justify-between gap-2">
         <span className="text-[10px] font-medium uppercase tracking-wide text-slate-500">

@@ -5,4 +5,6 @@ dj-database-url==3.1.2
 psycopg2-binary==2.9.13
 drf-spectacular==0.30.0
 networkx==3.7
+boto3==1.35.99
+PyYAML==6.0.2
 python-dotenv==1.2.4

@@ -14,4 +14,5 @@ urlpatterns = [
         name="snapshot-reachability",
     ),
     path("simulations/<int:pk>/", views.SimulationDetailView.as_view(), name="simulation-detail"),
+    path("simulations/<int:pk>/export/", views.SimulationExportView.as_view(), name="simulation-export"),
 ]

@@ -120,12 +120,25 @@ REST_FRAMEWORK = {
         "ai_explain": os.environ.get("AI_EXPLAIN_RATE", "30/min"),
         # Simulations are pure CPU (no model call) but each one writes a row; keep them bounded.
         "simulate": os.environ.get("SIMULATE_RATE", "60/min"),
+        # Each live import makes ~10 AWS API calls; keep them rare.
+        "aws_import": os.environ.get("AWS_IMPORT_RATE", "6/min"),
     },
     # How many trusted reverse proxies sit in front of the app. 0 = use the socket address and
     # ignore X-Forwarded-For (a client can forge that header to dodge rate limits). Behind one
     # platform proxy (Render, Fly, Railway...) set NUM_PROXIES=1.
     "NUM_PROXIES": int(os.environ.get("NUM_PROXIES", 0)),
 }
+
+# ---- Live AWS import (read-only). Off by default: the API has no authentication yet, so turning this
+# on lets anyone who can reach the backend import the *server's* AWS view. Enable it only on a private
+# deployment, with a read-only role (infra/aws-readonly-role.yaml), and preferably an allowlist.
+AWS_IMPORT_ENABLED = os.environ.get("AWS_IMPORT_ENABLED", "false").lower() in ("1", "true", "yes")
+AWS_IMPORT_ALLOWED_ROLE_ARNS = [
+    a.strip() for a in os.environ.get("AWS_IMPORT_ALLOWED_ROLE_ARNS", "").split(",") if a.strip()
+]
+AWS_IMPORT_ALLOWED_REGIONS = [
+    r.strip() for r in os.environ.get("AWS_IMPORT_ALLOWED_REGIONS", "").split(",") if r.strip()
+]
 
 SPECTACULAR_SETTINGS = {
     "TITLE": "CloudGuard AI API",

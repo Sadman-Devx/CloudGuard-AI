@@ -3,6 +3,8 @@ import { useState } from "react";
 import { runSimulation } from "../../api/endpoints.js";
 import Notice from "../../components/Notice.jsx";
 import TwinSlider from "../score/TwinSlider.jsx";
+import BeforeAfterView from "./BeforeAfterView.jsx";
+import ExportFix from "./ExportFix.jsx";
 
 const OUTCOMES = {
   improves_security: {
@@ -290,6 +292,7 @@ export default function SimulationPanel({
                 </Notice>
               )}
               <TwinSlider score={data.score} findings={result.findings} />
+              <BeforeAfterView result={result} score={data.score} />
               <p className="text-sm text-slate-700">
                 Findings: {result.findings.before_summary.total} before →{" "}
                 {result.findings.after_summary.total} after
@@ -315,6 +318,7 @@ export default function SimulationPanel({
                   </ul>
                 </div>
               )}
+              <ExportFix simulationId={data.id} />
             </div>
           )}
         </>
